@@ -1,0 +1,63 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #F8FAFC;
+  --bg-card: #ffffff;
+  --bg-muted: #F1F5F9;
+  --fg: #0F172A;
+  --muted: #64748B;
+  --brand: #3B82F6;
+  --border: #E2E8F0;
+  --danger: #EF4444;
+  --success: #10B981;
+  --warning: #F59E0B;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-card: var(--bg-card);
+  --color-bg-muted: var(--bg-muted);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-brand: var(--brand);
+  --color-border: var(--border);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0F172A;
+    --bg-card: #1E293B;
+    --bg-muted: #1E293B;
+    --fg: #F1F5F9;
+    --muted: #94A3B8;
+    --brand: #60A5FA;
+    --border: #334155;
+    --danger: #F87171;
+    --success: #34D399;
+    --warning: #FBBF24;
+  }
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+@layer utilities {
+  .bg-bg { background-color: var(--bg); }
+  .bg-bg-card { background-color: var(--bg-card); }
+  .bg-bg-muted { background-color: var(--bg-muted); }
+  .fg-fg { color: var(--fg); }
+  .muted { color: var(--muted); }
+  .brand { color: var(--brand); }
+  .border-brand { border-color: var(--border); }
+  .danger { color: var(--danger); }
+  .success { color: var(--success); }
+  .warning { color: var(--warning); }
+}
