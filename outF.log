@@ -1,0 +1,15 @@
+
+> frondtendkit@0.1.0 dev
+> next dev
+
+▲ Next.js 16.3.2 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.40.159:3000
+- Environments: .env.local
+✓ Ready in 679ms
+✓ Running next.config.mjs took 22ms
+
+○ Compiling /register ...
+ GET /register 200 in 4.0s (next.js: 3.7s, application-code: 306ms)
+ GET / 200 in 1029ms (next.js: 700ms, application-code: 330ms)
+ GET / 200 in 213ms (next.js: 39ms, application-code: 174ms)

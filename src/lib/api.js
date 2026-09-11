@@ -16,6 +16,15 @@ async function request(path, { method = 'GET', body, headers = {}, token } = {})
   const url = buildUrl(path);
   const h = { 'Content-Type': 'application/json', ...headers };
   if (token) h['Authorization'] = `Bearer ${token}`;
+  // Tenant header (schema-per-tenant preparation) — derived from JWT/user
+  try {
+    const raw = typeof window !== 'undefined' ? localStorage.getItem('cobrokits_user') : null;
+    if (raw) {
+      const u = JSON.parse(raw);
+      const tid = u?.empresa_id || u?.id;
+      if (tid) h['X-Tenant-Id'] = tid;
+    }
+  } catch {}
 
   const res = await fetch(url, {
     method,
