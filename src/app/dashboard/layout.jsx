@@ -40,21 +40,29 @@ export default function DashboardLayout({ children }) {
   const [user, setUser] = useState(null);
   const [open, setOpen] = useState(false);
   const [cobroHoy, setCobroHoy] = useState('Todos');
+  const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
+    const token = getToken();
+    const hasCookie = typeof document !== 'undefined' && document.cookie.includes('token=');
+    if (!token && !hasCookie) {
+      router.replace('/login');
+      return;
+    }
     const u = getUser();
     setUser(u);
-    // validar sesión
     (async () => {
       try {
-        const token = getToken();
         const res = await fetch('/api/dashboard?action=overview', { credentials: 'include', headers: token ? { Authorization: `Bearer ${token}` } : {} });
-        if (res.status === 401 && !token) {
-          // intentar sin token pero con cookie: si sigue 401, ir a login
-          const hasCookie = typeof document !== 'undefined' && document.cookie.includes('token=');
-          if (!hasCookie) router.replace('/login');
+        if (res.status === 401) {
+          const stillNoCookie = typeof document !== 'undefined' && !document.cookie.includes('token=');
+          if (stillNoCookie && !token) {
+            router.replace('/login');
+            return;
+          }
         }
       } catch {}
+      setAuthChecked(true);
     })();
   }, [router]);
 
@@ -171,7 +179,18 @@ export default function DashboardLayout({ children }) {
               {nav.map((item) => {
                 const Icon = item.icon;
                 const active = isActive(item);
-                return (
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen bg-[#f1f5f9] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-slate-400">
+          <div className="w-8 h-8 border-4 border-[#2563eb] border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm">Verificando sesión...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
                   <Link
                     key={item.href}
                     href={item.href}
