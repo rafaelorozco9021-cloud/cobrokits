@@ -91,7 +91,9 @@ export async function loginViaProxy(email, password, onStatus) {
         try {
           const meRes = await fetch('/api/auth/me', { credentials: 'include' });
           if (meRes.status === 401) {
-            throw new Error('Sesión no establecida en este dominio. Limpia las cookies del sitio y reintenta.');
+            const meBody = await meRes.json().catch(() => ({}));
+            const detail = meBody.message ? ` (${meBody.message})` : '';
+            throw new Error(`Sesión no establecida en este dominio${detail}. Limpia las cookies del sitio y reintenta.`);
           }
         } catch (e) {
           if (e.message && e.message.includes('Sesión no establecida')) throw e;

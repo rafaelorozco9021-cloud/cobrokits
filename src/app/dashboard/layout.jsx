@@ -19,7 +19,7 @@ import {
   X,
   ChevronDown,
 } from 'lucide-react';
-import { getToken, getUser, saveUser, clearToken } from '@/lib/auth';
+import { getToken, getUser, saveUser, clearToken, clearAuthCookies } from '@/lib/auth';
 
 const nav = [
   { href: '/dashboard', label: 'Inicio', icon: Home, exact: true },
@@ -67,9 +67,13 @@ export default function DashboardLayout({ children }) {
     })();
   }, []);
 
-  function logout() {
+  async function logout() {
+    try {
+      // El backend borra la cookie HttpOnly (el frontend no puede: document.cookie no la alcanza)
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+    } catch {}
     clearToken();
-    document.cookie = 'token=; Path=/; Max-Age=0';
+    clearAuthCookies();
     router.push('/login');
   }
 
