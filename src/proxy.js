@@ -27,10 +27,11 @@ export default function proxy(request) {
   const host = request.headers.get('host') || '';
   const slug = extractTenantSlug(host);
   const { pathname } = request.nextUrl;
+  const origin = request.nextUrl.origin;
 
-  // Si está en un subdominio y NO está en /dashboard, redirigir al login principal
+  // Si está en un subdominio y NO es /dashboard ni /api, redirigir al login del dominio principal
   if (slug && !pathname.startsWith('/dashboard') && !pathname.startsWith('/api') && !pathname.startsWith('/_next')) {
-    return NextResponse.redirect(new URL('/login', request.url));
+    return NextResponse.redirect(new URL('/login', `https://cobrokits.online`));
   }
 
   // Propagar slug como header hacia el backend (via rewrite /api) y hacia server components
@@ -47,9 +48,11 @@ export default function proxy(request) {
 
   const token = request.cookies.get('token')?.value;
   if (!token) {
-    const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('redirect', pathname);
-    return NextResponse.redirect(loginUrl);
+    // Si estamos en subdominio, redirect al login principal
+    if (slug) {
+      return NextResponse.redirect(new URL('/login', `https://cobrokits.online`));
+    }
+    return NextResponse.redirect(new URL('/login', origin));
   }
   return NextResponse.next({ request: { headers: requestHeaders } });
 }
