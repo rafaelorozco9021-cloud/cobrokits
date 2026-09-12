@@ -33,7 +33,11 @@ function RegisterForm(){
       // Auto-login con las mismas credenciales
       const login=await loginViaProxy(form.email.trim(), form.password);
       setSuccess(`Empresa creada: ${login.user?.name||form.name}. Redirigiendo...`);
-      setTimeout(()=> window.location.href='/dashboard', 800);
+      if (login.user?.role === 'empresa' && login.user?.slug) {
+        setTimeout(()=> window.location.href=`https://${login.user.slug}.cobrokits.online/dashboard`, 800);
+      } else {
+        setTimeout(()=> window.location.href='/dashboard', 800);
+      }
     }catch(err){
       setError(err.message||'Error creando empresa');
     }finally{ setLoading(false); }

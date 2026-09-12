@@ -74,6 +74,17 @@ export default function DashboardLayout({ children }) {
     return pathname === item.href || pathname.startsWith(item.href + '/');
   };
 
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen bg-[#f1f5f9] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-slate-400">
+          <div className="w-8 h-8 border-4 border-[#2563eb] border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm">Verificando sesión...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#f1f5f9] flex">
       {/* Sidebar desktop */}
@@ -176,18 +187,7 @@ export default function DashboardLayout({ children }) {
               {nav.map((item) => {
                 const Icon = item.icon;
                 const active = isActive(item);
-  if (!authChecked) {
-    return (
-      <div className="min-h-screen bg-[#f1f5f9] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3 text-slate-400">
-          <div className="w-8 h-8 border-4 border-[#2563eb] border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm">Verificando sesión...</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
+                return (
                   <Link
                     key={item.href}
                     href={item.href}
