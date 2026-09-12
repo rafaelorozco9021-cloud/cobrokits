@@ -31,7 +31,7 @@ export default function proxy(request) {
 
   // Si está en un subdominio y NO es /dashboard ni /api, redirigir al login del dominio principal
   if (slug && !pathname.startsWith('/dashboard') && !pathname.startsWith('/api') && !pathname.startsWith('/_next')) {
-    return NextResponse.redirect(new URL('/login', `https://cobrokits.online`));
+    return NextResponse.redirect(new URL('/login', `https://www.cobrokits.online`));
   }
 
   // Propagar slug como header hacia el backend (via rewrite /api) y hacia server components
@@ -50,7 +50,7 @@ export default function proxy(request) {
   if (!token) {
     // Si estamos en subdominio, redirect al login principal
     if (slug) {
-      return NextResponse.redirect(new URL('/login', `https://cobrokits.online`));
+      return NextResponse.redirect(new URL('/login', `https://www.cobrokits.online`));
     }
     return NextResponse.redirect(new URL('/login', origin));
   }
