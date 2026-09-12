@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { MapPin, Box, Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
-import { loginViaProxy } from '@/lib/auth';
+import { loginViaProxy, clearAuthCookies } from '@/lib/auth';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -13,17 +13,22 @@ export default function LoginPage() {
   const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [status, setStatus] = useState('');
+
+  // Limpiar tokens viejos (ej: de antes del wipe) que rebotan como 401
+  useEffect(() => { clearAuthCookies(); }, []);
 
   async function onSubmit(e) {
     e.preventDefault();
     setError('');
+    setStatus('');
     if (!email.trim() || !password.trim()) {
       setError('Completa email y contraseña.');
       return;
     }
     setLoading(true);
     try {
-      const res = await loginViaProxy(email.trim(), password);
+      const res = await loginViaProxy(email.trim(), password, (msg) => setStatus(msg));
       console.log('[login] ok', res.user);
       const params = new URLSearchParams(window.location.search);
       const redirectTo = params.get('redirect');
@@ -80,6 +85,12 @@ export default function LoginPage() {
               <div className="flex items-start gap-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm px-4 py-3">
                 <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
                 <span>{error}</span>
+              </div>
+            )}
+            {status && !error && (
+              <div className="flex items-start gap-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-sm px-4 py-3">
+                <Loader2 className="w-5 h-5 shrink-0 mt-0.5 animate-spin" />
+                <span>{status}</span>
               </div>
             )}
 

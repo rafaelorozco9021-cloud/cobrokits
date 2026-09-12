@@ -1,9 +1,9 @@
 'use client';
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { MapPin, Box, Mail, Lock, User, Phone, Building2, AlertCircle, Loader2, ArrowRight, Check } from 'lucide-react';
-import { loginViaProxy } from '@/lib/auth';
+import { loginViaProxy, clearAuthCookies } from '@/lib/auth';
 
 function RegisterForm(){
   const searchParams = useSearchParams();
@@ -12,6 +12,8 @@ function RegisterForm(){
   const [loading,setLoading]=useState(false);
   const [error,setError]=useState('');
   const [success,setSuccess]=useState('');
+
+  useEffect(() => { clearAuthCookies(); }, []);
 
   async function onSubmit(e){
     e.preventDefault();
@@ -30,8 +32,8 @@ function RegisterForm(){
       });
       const data=await res.json().catch(()=>({}));
       if(!res.ok) throw new Error(data.error||data.message||`Error ${res.status}`);
-      // Auto-login con las mismas credenciales
-      const login=await loginViaProxy(form.email.trim(), form.password);
+      // Auto-login con las mismas credenciales (por proxy: reintenta si el backend está dormido)
+      const login=await loginViaProxy(form.email.trim(), form.password, (msg) => setSuccess(msg));
       setSuccess(`Empresa creada: ${login.user?.name||form.name}. Redirigiendo...`);
       if (login.user?.role === 'empresa' && login.user?.slug) {
         setTimeout(()=> window.location.href=`https://${login.user.slug}.cobrokits.online/dashboard`, 800);

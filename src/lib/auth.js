@@ -45,33 +45,80 @@ export function getUser() {
   }
 }
 
-// Login usando el rewrite de Next (/api -> backend) para que la cookie HttpOnly se setee en localhost:3000
-export async function loginViaProxy(email, password) {
-  // Intento 1: via proxy Next (recomendado para cookie HttpOnly)
+// Limpia tokens viejos (ej: de antes del wipe de empresas) que rebotan como 401.
+// Borra tanto la cookie host-only como las de dominio padre.
+export function clearAuthCookies() {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
   try {
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-      credentials: 'include',
-    });
-    const data = await res.json().catch(() => ({}));
-    if (res.ok) {
-      if (data.token) saveToken(data.token);
-      if (data.user) saveUser(data.user);
-      return data;
+    document.cookie = 'token=; Path=/; Max-Age=0';
+    document.cookie = 'token=; Path=/; Max-Age=0; SameSite=Lax; Secure';
+    const parts = window.location.hostname.split('.');
+    for (let i = 1; i < parts.length - 1; i++) {
+      const d = '.' + parts.slice(i).join('.');
+      document.cookie = `token=; Path=/; Domain=${d}; Max-Age=0`;
+      document.cookie = `token=; Path=/; Domain=${d}; Max-Age=0; SameSite=Lax; Secure`;
     }
-    // si es 401/400, no reintentar con fallback, lanzar error directo
-    if (res.status === 401 || res.status === 400) {
-      throw new Error(data.error || data.message || `Credenciales inválidas (${res.status})`);
+  } catch {}
+}
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+// Login usando el rewrite de Next (/api -> backend) para que la cookie HttpOnly se setee en localhost:3000
+export async function loginViaProxy(email, password, onStatus) {
+  const host = typeof window !== 'undefined' ? window.location.hostname : '';
+  const isLocalhost = host === 'localhost' || host === '127.0.0.1';
+  // En producción NO se usa fallback directo: la cookie quedaría atada a
+  // backend-cobrokits.onrender.com y no serviría en los subdominios (rebote al login).
+  // En su lugar se reintenta por el proxy para despertar al backend (Render free).
+  const maxAttempts = isLocalhost ? 1 : 3;
+  let lastErr = new Error('No se pudo contactar el servidor');
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+        credentials: 'include',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        if (data.token) saveToken(data.token);
+        if (data.user) saveUser(data.user);
+        // Verificar que la sesión quedó usable (cookie) ANTES de redirigir al subdominio.
+        // Si la cookie no quedó, redirigir sería un rebote seguro al login.
+        try {
+          const meRes = await fetch('/api/auth/me', { credentials: 'include' });
+          if (meRes.status === 401) {
+            throw new Error('Sesión no establecida en este dominio. Limpia las cookies del sitio y reintenta.');
+          }
+        } catch (e) {
+          if (e.message && e.message.includes('Sesión no establecida')) throw e;
+          // 404 (backend aún sin /me) o error de red: seguir igual, el dashboard validará.
+        }
+        return data;
+      }
+      // si es 401/400, no reintentar con fallback, lanzar error directo
+      if (res.status === 401 || res.status === 400) {
+        throw new Error(data.error || data.message || `Credenciales inválidas (${res.status})`);
+      }
+      // para otros errores (502, 504, backend dormido) reintentar
+      throw new Error(data.error || data.message || `Error proxy ${res.status}`);
+    } catch (err) {
+      // Si fue credenciales o sesión no establecida, re-lanzar sin reintentos
+      if (err.message && (err.message.includes('Credenciales inválidas') || err.message.includes('Sesión no establecida'))) throw err;
+      lastErr = err;
+      if (attempt < maxAttempts) {
+        if (onStatus) onStatus(`Despertando el servidor (intento ${attempt}/${maxAttempts})...`);
+        await sleep(15000);
+        continue;
+      }
     }
-    // para otros errores (502, 504) intentar fallback directo
-    throw new Error(data.error || data.message || `Error proxy ${res.status}`);
-  } catch (err) {
-    // Si fue credenciales, re-lanzar sin fallback
-    if (err.message && err.message.includes('Credenciales inválidas')) throw err;
-    // Fallback directo a NEXT_PUBLIC_API_URL
-    console.warn('[auth] proxy falló, intentando directo:', err.message);
+  }
+  // Solo en desarrollo local: fallback directo a NEXT_PUBLIC_API_URL
+  if (isLocalhost) {
+    console.warn('[auth] proxy falló, intentando directo:', lastErr.message);
     const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
     const res2 = await fetch(`${API_URL.replace(/\/$/, '')}/api/auth/login`, {
       method: 'POST',
@@ -87,6 +134,7 @@ export async function loginViaProxy(email, password) {
     if (data2.user) saveUser(data2.user);
     return data2;
   }
+  throw lastErr;
 }
 
 export async function fetchDashboard(action = 'overview') {
