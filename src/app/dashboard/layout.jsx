@@ -43,28 +43,25 @@ export default function DashboardLayout({ children }) {
   const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
-    const token = getToken();
-    const hasCookie = typeof document !== 'undefined' && document.cookie.includes('token=');
-    if (!token && !hasCookie) {
-      router.replace('/login');
-      return;
-    }
     const u = getUser();
     setUser(u);
     (async () => {
       try {
+        const token = getToken();
+        const headers = { credentials: 'include' };
+        if (token) headers.headers = { Authorization: `Bearer ${token}` };
         const res = await fetch('/api/dashboard?action=overview', { credentials: 'include', headers: token ? { Authorization: `Bearer ${token}` } : {} });
         if (res.status === 401) {
-          const stillNoCookie = typeof document !== 'undefined' && !document.cookie.includes('token=');
-          if (stillNoCookie && !token) {
-            router.replace('/login');
-            return;
-          }
+          window.location.href = 'https://www.cobrokits.online/login';
+          return;
         }
-      } catch {}
+      } catch {
+        window.location.href = 'https://www.cobrokits.online/login';
+        return;
+      }
       setAuthChecked(true);
     })();
-  }, [router]);
+  }, []);
 
   function logout() {
     clearToken();
