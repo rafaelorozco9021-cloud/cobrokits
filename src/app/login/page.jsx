@@ -25,9 +25,11 @@ export default function LoginPage() {
     try {
       const res = await loginViaProxy(email.trim(), password);
       console.log('[login] ok', res.user);
-      // pequeño delay para que la cookie se asiente, luego navegar
-      // usar window.location para forzar recarga con cookie HttpOnly
-      window.location.href = '/dashboard';
+      if (res.user?.role === 'empresa' && res.user?.slug) {
+        window.location.href = `https://${res.user.slug}.cobrokits.online/dashboard`;
+      } else {
+        window.location.href = '/dashboard';
+      }
     } catch (err) {
       console.error('[login] error', err);
       const msg = err.message || 'Credenciales inválidas. Verifica backend en ' + (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001');
