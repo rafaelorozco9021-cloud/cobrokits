@@ -26,6 +26,12 @@ function extractTenantSlug(host) {
 export default function proxy(request) {
   const host = request.headers.get('host') || '';
   const slug = extractTenantSlug(host);
+  const { pathname } = request.nextUrl;
+
+  // Si está en un subdominio y NO está en /dashboard, redirigir al login principal
+  if (slug && !pathname.startsWith('/dashboard') && !pathname.startsWith('/api') && !pathname.startsWith('/_next')) {
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
 
   // Propagar slug como header hacia el backend (via rewrite /api) y hacia server components
   const requestHeaders = new Headers(request.headers);
@@ -34,7 +40,6 @@ export default function proxy(request) {
     requestHeaders.set('x-tenant-host', host);
   }
 
-  const { pathname } = request.nextUrl;
   const isProtected = PROTECTED.some((p) => pathname === p || pathname.startsWith(p + '/'));
   if (!isProtected) {
     return NextResponse.next({ request: { headers: requestHeaders } });
