@@ -12,10 +12,26 @@ function buildUrl(path) {
   return `${base}${p}`;
 }
 
+function getTenantSlugFromHost() {
+  try {
+    if (typeof window === 'undefined') return null;
+    const host = window.location.hostname.toLowerCase();
+    if (host === 'localhost' || host === 'cobrokits.online' || host === 'www.cobrokits.online' || host.endsWith('.vercel.app')) return null;
+    if (host.endsWith('.cobrokits.online')) {
+      const sub = host.replace('.cobrokits.online', '').trim();
+      if (sub && sub !== 'www' && !sub.includes('.')) return sub;
+    }
+  } catch {}
+  return null;
+}
+
 async function request(path, { method = 'GET', body, headers = {}, token } = {}) {
   const url = buildUrl(path);
   const h = { 'Content-Type': 'application/json', ...headers };
   if (token) h['Authorization'] = `Bearer ${token}`;
+  // Tenant headers — subdomain slug for wildcard multitenancy
+  const slug = getTenantSlugFromHost();
+  if (slug) h['X-Tenant-Slug'] = slug;
   // Tenant header (schema-per-tenant preparation) — derived from JWT/user
   try {
     const raw = typeof window !== 'undefined' ? localStorage.getItem('cobrokits_user') : null;
