@@ -19,7 +19,7 @@ import {
   X,
   ChevronDown,
 } from 'lucide-react';
-import { getToken, getUser, clearToken } from '@/lib/auth';
+import { getToken, getUser, saveUser, clearToken } from '@/lib/auth';
 
 const nav = [
   { href: '/dashboard', label: 'Inicio', icon: Home, exact: true },
@@ -43,17 +43,21 @@ export default function DashboardLayout({ children }) {
   const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
-    const u = getUser();
-    setUser(u);
+    // localStorage no se comparte entre subdominios: la fuente real es /api/auth/me (cookie httpOnly o Bearer)
     (async () => {
       try {
         const token = getToken();
-        const headers = { credentials: 'include' };
-        if (token) headers.headers = { Authorization: `Bearer ${token}` };
-        const res = await fetch('/api/dashboard?action=overview', { credentials: 'include', headers: token ? { Authorization: `Bearer ${token}` } : {} });
+        const res = await fetch('/api/auth/me', { credentials: 'include', headers: token ? { Authorization: `Bearer ${token}` } : {} });
         if (res.status === 401) {
           window.location.href = 'https://www.cobrokits.online/login';
           return;
+        }
+        const me = await res.json().catch(() => null);
+        if (me?.id) {
+          setUser(me);
+          saveUser(me);
+        } else {
+          setUser(getUser());
         }
       } catch {
         window.location.href = 'https://www.cobrokits.online/login';
@@ -74,6 +78,11 @@ export default function DashboardLayout({ children }) {
     return pathname === item.href || pathname.startsWith(item.href + '/');
   };
 
+  // Nombre de la empresa logueada (viene de /api/auth/me, no de localStorage)
+  const empresaName = user?.empresa_name || (user?.role === 'empresa' ? user?.name : null) || 'Empresa';
+  const subLabel = user?.role === 'empresa' ? (user?.email || 'Empresa') : (user?.name || user?.role || '');
+  const avatarLetter = (empresaName || 'E').charAt(0).toUpperCase();
+
   if (!authChecked) {
     return (
       <div className="min-h-screen bg-[#f1f5f9] flex items-center justify-center">
@@ -91,11 +100,11 @@ export default function DashboardLayout({ children }) {
       <aside className="hidden lg:flex w-[240px] shrink-0 bg-white border-r border-slate-200 flex-col">
         <div className="h-[64px] flex items-center gap-3 px-4 border-b border-slate-200">
           <div className="w-9 h-9 rounded-full bg-amber-500 flex items-center justify-center text-white font-bold text-sm">
-            {(user?.name || 'E').charAt(0).toUpperCase()}
+            {avatarLetter}
           </div>
           <div className="leading-tight min-w-0">
-            <p className="text-sm font-black text-slate-900 truncate">{user?.name || 'Empresa'}</p>
-            <p className="text-[11px] text-slate-500 -mt-0.5 truncate">{user?.role || 'empresa'}</p>
+            <p className="text-sm font-black text-slate-900 truncate">{empresaName}</p>
+            <p className="text-[11px] text-slate-500 -mt-0.5 truncate">{subLabel}</p>
           </div>
           <div className="ml-auto flex gap-1">
             <button className="w-7 h-7 rounded-md border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50">
@@ -175,9 +184,9 @@ export default function DashboardLayout({ children }) {
             <div className="flex items-center justify-between h-12 mb-2">
               <div className="flex items-center gap-2 min-w-0">
                 <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center text-white font-bold text-sm">
-                  {(user?.name || 'E').charAt(0).toUpperCase()}
+                  {avatarLetter}
                 </div>
-                <span className="font-black text-slate-900 truncate">{user?.name || 'Empresa'}</span>
+                <span className="font-black text-slate-900 truncate">{empresaName}</span>
               </div>
               <button onClick={() => setOpen(false)} className="p-2 rounded-lg bg-slate-100">
                 <X className="w-5 h-5" />
@@ -216,9 +225,9 @@ export default function DashboardLayout({ children }) {
           </button>
           <div className="flex items-center gap-2 min-w-0">
             <div className="w-7 h-7 rounded-full bg-amber-500 flex items-center justify-center text-white font-bold text-xs">
-              {(user?.name || 'E').charAt(0).toUpperCase()}
+              {avatarLetter}
             </div>
-            <span className="font-bold text-slate-900 text-sm truncate">{user?.name || 'Empresa'}</span>
+            <span className="font-bold text-slate-900 text-sm truncate">{empresaName}</span>
           </div>
         </div>
         <main className="flex-1 p-3 sm:p-4 lg:p-6 overflow-auto">{children}</main>
