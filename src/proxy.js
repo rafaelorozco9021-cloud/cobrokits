@@ -41,16 +41,10 @@ export default function proxy(request) {
   }
 
   const token = request.cookies.get('token')?.value;
-  // Permitir también si viene Authorization header es difícil en middleware (es page navigation),
-  // así que si no hay cookie, mandamos a /login.
-  // El dashboard client hará fallback a localStorage Bearer si existe.
   if (!token) {
-    // Dejar pasar: el layout client-side hará redirect si hay token en localStorage.
-    // Pero para UX de navegación directa sin token, redirigir.
-    // Comprobamos si hay referer con token es imposible, así que no bloqueamos duro:
-    // Solo si no hay cookie, dejamos pasar y el client guardará.
-    // Para forzar login en navegación fresca sin cookie ni storage, el client redirect hará el trabajo.
-    return NextResponse.next({ request: { headers: requestHeaders } });
+    const loginUrl = new URL('/login', request.url);
+    loginUrl.searchParams.set('redirect', pathname);
+    return NextResponse.redirect(loginUrl);
   }
   return NextResponse.next({ request: { headers: requestHeaders } });
 }

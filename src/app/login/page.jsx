@@ -25,8 +25,12 @@ export default function LoginPage() {
     try {
       const res = await loginViaProxy(email.trim(), password);
       console.log('[login] ok', res.user);
+      const params = new URLSearchParams(window.location.search);
+      const redirectTo = params.get('redirect');
       if (res.user?.role === 'empresa' && res.user?.slug) {
         window.location.href = `https://${res.user.slug}.cobrokits.online/dashboard`;
+      } else if (redirectTo) {
+        window.location.href = redirectTo;
       } else {
         window.location.href = '/dashboard';
       }
