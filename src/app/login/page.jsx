@@ -73,13 +73,6 @@ export default function LoginPage() {
             <p className="mt-2 text-sm text-slate-400">Ingresa a tu panel de control operativo</p>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <span className="text-xs text-slate-500 w-full">Demo 1-click:</span>
-            <button type="button" onClick={()=>{setEmail('esperanza@demo.cobrokits'); setPassword('Esperanza2026!');}} className="text-xs px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20">Esperanza</button>
-            <button type="button" onClick={()=>{setEmail('valle@demo.cobrokits'); setPassword('Valle2026!');}} className="text-xs px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20">Valle</button>
-            <button type="button" onClick={()=>{setEmail('sabores@demo.cobrokits'); setPassword('Sabores2026!');}} className="text-xs px-3 py-1.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700">Sabores</button>
-          </div>
-
           <form onSubmit={onSubmit} className="mt-8 space-y-5 bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl">
             {error && (
               <div className="flex items-start gap-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm px-4 py-3">
@@ -117,7 +110,6 @@ export default function LoginPage() {
                 <label htmlFor="password" className="text-sm font-semibold text-slate-200">
                   Contraseña
                 </label>
-                <span className="text-xs text-slate-500">ADMIN_PASSWORD para demo</span>
               </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />

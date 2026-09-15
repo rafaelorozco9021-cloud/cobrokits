@@ -101,6 +101,10 @@ export async function loginViaProxy(email, password, onStatus) {
         }
         return data;
       }
+      // Rate limit (429): lanzar error directo, sin reintentos de "despertar servidor"
+      if (res.status === 429) {
+        throw new Error(data.message || 'Demasiados intentos. Espera un momento y vuelve a intentarlo.');
+      }
       // si es 401/400, no reintentar con fallback, lanzar error directo
       if (res.status === 401 || res.status === 400) {
         throw new Error(data.error || data.message || `Credenciales inválidas (${res.status})`);
@@ -108,8 +112,8 @@ export async function loginViaProxy(email, password, onStatus) {
       // para otros errores (502, 504, backend dormido) reintentar
       throw new Error(data.error || data.message || `Error proxy ${res.status}`);
     } catch (err) {
-      // Si fue credenciales o sesión no establecida, re-lanzar sin reintentos
-      if (err.message && (err.message.includes('Credenciales inválidas') || err.message.includes('Sesión no establecida'))) throw err;
+      // Si fue credenciales, sesión no establecida o rate limit, re-lanzar sin reintentos
+      if (err.message && (err.message.includes('Credenciales inválidas') || err.message.includes('Sesión no establecida') || err.message.includes('Demasiados intentos'))) throw err;
       lastErr = err;
       if (attempt < maxAttempts) {
         if (onStatus) onStatus(`Despertando el servidor (intento ${attempt}/${maxAttempts})...`);

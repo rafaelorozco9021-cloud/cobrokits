@@ -4,8 +4,8 @@ import { Shield, Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, Loader2 } fro
 import { loginViaProxy } from '@/lib/auth';
 
 export default function AdminLoginPage(){
-  const [email,setEmail]=useState('superadmin@cobrokits.com');
-  const [password,setPassword]=useState('SuperAdmin2026!');
+  const [email,setEmail]=useState('');
+  const [password,setPassword]=useState('');
   const [show,setShow]=useState(false);
   const [loading,setLoading]=useState(false);
   const [error,setError]=useState('');

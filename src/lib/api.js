@@ -25,10 +25,21 @@ function getTenantSlugFromHost() {
   return null;
 }
 
+function getCsrfToken() {
+  if (typeof document === 'undefined') return null;
+  const m = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
 async function request(path, { method = 'GET', body, headers = {}, token } = {}) {
   const url = buildUrl(path);
   const h = { 'Content-Type': 'application/json', ...headers };
   if (token) h['Authorization'] = `Bearer ${token}`;
+  // Protección CSRF (doble envío): el backend valida el header contra la cookie csrf_token
+  if (method && method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
+    const csrf = getCsrfToken();
+    if (csrf) h['X-CSRF-Token'] = csrf;
+  }
   // Tenant headers — subdomain slug for wildcard multitenancy
   const slug = getTenantSlugFromHost();
   if (slug) h['X-Tenant-Slug'] = slug;
