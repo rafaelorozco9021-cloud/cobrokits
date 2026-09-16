@@ -10,9 +10,20 @@ function money(n) {
 }
 
 export default function Page() {
-  const [selectedDate, setSelectedDate] = useState(() => new Date('2026-09-02T12:00:00'));
+  const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [data, setData] = useState({ visits: [], products: [] });
   const [loading, setLoading] = useState(true);
+  // Tick de actualización en tiempo real: polling + foco/visibilidad
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    const t = setInterval(() => setTick((x) => x + 1), 30000);
+    const onFocus = () => setTick((x) => x + 1);
+    const onVis = () => { if (!document.hidden) setTick((x) => x + 1); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVis);
+    return () => { clearInterval(t); window.removeEventListener('focus', onFocus); document.removeEventListener('visibilitychange', onVis); };
+  }, []);
 
   const isoDate = selectedDate.toISOString().split('T')[0];
   const label = selectedDate.toLocaleDateString('es-CO', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -34,7 +45,7 @@ export default function Page() {
       setLoading(false);
     }
     load();
-  }, [isoDate]);
+  }, [isoDate, tick]);
 
   const perSeller = useMemo(() => {
     const dayVisits = (data.visits || []).filter((v) => String(v.visit_date || v.created_at || '').slice(0, 10) === isoDate);
@@ -99,7 +110,7 @@ export default function Page() {
     d.setDate(d.getDate() + 1);
     setSelectedDate(d);
   };
-  const goToday = () => setSelectedDate(new Date('2026-09-02T12:00:00'));
+  const goToday = () => setSelectedDate(new Date());
 
   return (
     <div className="space-y-4 max-w-[1600px] mx-auto">

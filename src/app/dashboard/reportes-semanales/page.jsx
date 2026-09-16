@@ -19,9 +19,20 @@ function getMonday(d) {
 }
 
 export default function Page() {
-  const [weekStart, setWeekStart] = useState(() => getMonday(new Date('2026-09-01')));
+  const [weekStart, setWeekStart] = useState(() => getMonday(new Date()));
   const [data, setData] = useState({ visits: [], payments: [], items: [], products: [] });
   const [loading, setLoading] = useState(true);
+  // Tick de actualización en tiempo real: polling + foco/visibilidad
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    const t = setInterval(() => setTick((x) => x + 1), 30000);
+    const onFocus = () => setTick((x) => x + 1);
+    const onVis = () => { if (!document.hidden) setTick((x) => x + 1); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVis);
+    return () => { clearInterval(t); window.removeEventListener('focus', onFocus); document.removeEventListener('visibilitychange', onVis); };
+  }, []);
 
   const weekEnd = useMemo(() => {
     const end = new Date(weekStart);
@@ -113,7 +124,7 @@ export default function Page() {
       }
     }
     load();
-  }, [weekStart, weekEnd]);
+  }, [weekStart, weekEnd, tick]);
 
   // Calcular métricas por día - usar visits con venta/abono/payment_method
   const perDay = useMemo(() => {
