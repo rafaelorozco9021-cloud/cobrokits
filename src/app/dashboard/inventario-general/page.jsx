@@ -33,6 +33,10 @@ export default function Page() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
   const [fProduct, setFProduct] = useState({ name: '', description: '', cost_price: '', price: '', category: 'embutidos', stock: '' });
+  // Ingreso de stock: producto objetivo + cantidad
+  const [stockTarget, setStockTarget] = useState(null);
+  const [stockQty, setStockQty] = useState('');
+  const [stockSaving, setStockSaving] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -114,6 +118,33 @@ export default function Page() {
   useEffect(() => {
     load();
   }, []);
+
+  async function handleAddStock(e) {
+    e.preventDefault();
+    if (!stockTarget) return;
+    const qty = Number(stockQty || 0);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      setError('Ingresa una cantidad mayor a 0.');
+      return;
+    }
+    setStockSaving(true);
+    setError('');
+    setMsg('');
+    try {
+      const headers = buildAuthHeaders({ 'Content-Type': 'application/json' });
+      const res = await fetch('/api/general-stock/add', { method: 'POST', credentials: 'include', headers, body: JSON.stringify({ product_id: stockTarget.id, quantity: qty }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.success === false) throw new Error(data.error || data.message || `Error ${res.status}`);
+      setMsg(`Stock agregado: +${qty} a "${stockTarget.name}" (nuevo stock: ${data.stock})`);
+      setStockTarget(null);
+      setStockQty('');
+      load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setStockSaving(false);
+    }
+  }
 
   async function handleAddProduct(e) {
     e.preventDefault();
@@ -239,7 +270,7 @@ export default function Page() {
                         <td className="text-right text-[13px] text-slate-600">{money(inv)}</td>
                         <td className="text-right text-[13px] font-bold text-emerald-600">{money(est)}</td>
                         <td className="text-center">
-                          <button className="w-7 h-7 rounded-full bg-[#2563eb] text-white inline-flex items-center justify-center hover:bg-blue-700 text-sm" title="Agregar stock">
+                          <button onClick={() => { setError(''); setMsg(''); setStockQty(''); setStockTarget(p); }} className="w-7 h-7 rounded-full bg-[#2563eb] text-white inline-flex items-center justify-center hover:bg-blue-700 text-sm" title={`Agregar stock a ${p.name}`}>
                             +
                           </button>
                         </td>
@@ -273,6 +304,26 @@ export default function Page() {
           </div>
         </div>
       </div>
+
+      {stockTarget && (
+        <Modal title="Agregar stock" onClose={() => setStockTarget(null)}>
+          <form onSubmit={handleAddStock} className="space-y-3">
+            <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+              <p className="font-bold text-slate-900 text-sm">{stockTarget.name}</p>
+              <p className="text-xs text-slate-500">Stock actual: <span className="font-black text-slate-900">{stockMap[stockTarget.id] ?? stockTarget.stock ?? 0}</span> uds</p>
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-700">Cantidad a agregar *</label>
+              <input required type="number" min="1" step="1" autoFocus value={stockQty} onChange={(e) => setStockQty(e.target.value)} placeholder="Ej: 50" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 bg-white mt-1" />
+            </div>
+            {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
+            <div className="flex gap-2 justify-end pt-2">
+              <button type="button" onClick={() => setStockTarget(null)} className="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-bold">Cancelar</button>
+              <button type="submit" disabled={stockSaving} className="px-4 py-2 rounded-lg bg-[#2563eb] text-white text-sm font-bold disabled:opacity-60">{stockSaving ? 'Agregando...' : 'Agregar stock'}</button>
+            </div>
+          </form>
+        </Modal>
+      )}
 
       {modal && (
         <Modal title="Agregar Producto" onClose={() => setModal(false)}>
