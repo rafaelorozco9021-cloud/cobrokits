@@ -88,7 +88,6 @@ export default function Page() {
 
   // Mismas métricas por día que el reporte semanal
   const perDay = useMemo(() => {
-    let runningDebt = 0;
     return days.map((d) => {
       const iso = bogotaDayKey(d);
       const dayVisits = (data.visits || []).filter((v) => bogotaDayKey(v.visit_date || v.created_at) === iso);
@@ -144,13 +143,13 @@ export default function Page() {
       const dDinero = cuentas > 0 ? Math.round((cnl / cuentas) * 100) : 0;
       const pctEfect = total > 0 ? Math.round((efectivo / total) * 100) : 0;
 
+      // Saldo del día: solo la deuda generada ESE día (no se arrastra a los siguientes)
       const deudaDia = dayVisits.reduce((a, v) => a + Number(v.deuda || 0), 0);
-      runningDebt += deudaDia;
 
       return {
         date: d,
         iso,
-        saldoAnt: runningDebt,
+        saldoAnt: deudaDia,
         cobros,
         costo,
         costoCll,

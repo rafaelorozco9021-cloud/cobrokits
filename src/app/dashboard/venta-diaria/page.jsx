@@ -50,14 +50,11 @@ export default function Page() {
 
   const perSeller = useMemo(() => {
     const dayVisits = (data.visits || []).filter((v) => bogotaDayKey(v.visit_date || v.created_at) === isoDate);
-    // Deuda acumulada por vendedor hasta la fecha seleccionada (saldo anterior)
+    // Saldo del día por vendedor: solo deuda generada ese día (sin arrastre)
     const debtBySeller = new Map();
-    for (const v of data.visits || []) {
-      const vdate = bogotaDayKey(v.visit_date || v.created_at);
-      if (vdate && vdate <= isoDate && Number(v.deuda || 0) > 0) {
-        const sid = v.seller_id;
-        debtBySeller.set(sid, (debtBySeller.get(sid) || 0) + Number(v.deuda));
-      }
+    for (const v of dayVisits) {
+      const sid = v.seller_id;
+      debtBySeller.set(sid, (debtBySeller.get(sid) || 0) + Number(v.deuda || 0));
     }
     // Agrupar por seller_id
     const map = new Map();

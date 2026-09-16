@@ -129,7 +129,6 @@ export default function Page() {
 
   // Calcular métricas por día - usar visits con venta/abono/payment_method
   const perDay = useMemo(() => {
-    let runningDebt = 0;
     return days.map((d) => {
       const iso = bogotaDayKey(d);
       // Visitas de ese día (día calendario Bogotá, igual en todos los reportes)
@@ -195,15 +194,14 @@ export default function Page() {
       const dDinero = cuentas > 0 ? Math.round((cnl / cuentas) * 100) : 0;
       const pctEfect = total > 0 ? Math.round((efectivo / total) * 100) : 0;
 
-      // Saldo anterior: deuda acumulada del día (incluida la de hoy) que queda por cobrar
+      // Saldo del día: solo la deuda generada ESE día (no se arrastra a los siguientes)
       const deudaDia = dayVisits.reduce((a, v) => a + Number(v.deuda || 0), 0);
-      runningDebt += deudaDia;
 
       return {
         date: d,
         iso,
         label: d.toLocaleDateString('es-CO', { weekday: 'long', day: '2-digit', month: '2-digit', year: '2-digit' }),
-        saldoAnt: runningDebt,
+        saldoAnt: deudaDia,
         cobros,
         costo,
         costoCll,
