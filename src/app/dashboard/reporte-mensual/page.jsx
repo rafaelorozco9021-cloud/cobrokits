@@ -173,12 +173,6 @@ export default function Page() {
       gasto: sum('gasto'),
       caja: sum('caja'),
       ganancia: sum('ganancia'),
-      dMerca: perDay.length ? Math.round(perDay.reduce((a, r) => a + r.dMerca, 0) / perDay.length) : 0,
-      dDinero: perDay.length ? Math.round(perDay.reduce((a, r) => a + r.dDinero, 0) / perDay.length) : 0,
-      cuentas: sum('cuentas'),
-      cnl: sum('cnl'),
-      unidades: sum('unidades'),
-      pctEfect: perDay.length ? Math.round(perDay.reduce((a, r) => a + r.pctEfect, 0) / perDay.length) : 0,
     };
   }, [perDay]);
 
@@ -229,12 +223,6 @@ export default function Page() {
                 <th className="px-1 py-2">GASTO</th>
                 <th className="px-1 py-2">$</th>
                 <th className="px-1 py-2 bg-emerald-500">GANANCIA</th>
-                <th className="px-1 py-2">D/MERCA</th>
-                <th className="px-1 py-2">D/DINERO</th>
-                <th className="px-1 py-2">CUENTAS</th>
-                <th className="px-1 py-2">CNL</th>
-                <th className="px-1 py-2">UNID.</th>
-                <th className="px-1 py-2">% EFECT.</th>
               </tr>
             </thead>
             <tbody>
@@ -255,12 +243,6 @@ export default function Page() {
                   <td className="px-1 py-2 text-center text-slate-600">{money(r.gasto)}</td>
                   <td className="px-1 py-2 text-center font-bold text-slate-900">{money(r.caja)}</td>
                   <td className={`px-1 py-2 text-center font-black ${r.ganancia >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>{money(r.ganancia)}</td>
-                  <td className="px-1 py-2 text-center text-slate-600">{r.dMerca}%</td>
-                  <td className="px-1 py-2 text-center text-slate-600">{r.dDinero}%</td>
-                  <td className="px-1 py-2 text-center text-slate-600">{r.cuentas}</td>
-                  <td className="px-1 py-2 text-center text-slate-600">{r.cnl}</td>
-                  <td className="px-1 py-2 text-center text-slate-600">{r.unidades}</td>
-                  <td className="px-1 py-2 text-center text-slate-600">{r.pctEfect}%</td>
                 </tr>
               ))}
               <tr className="bg-blue-50 font-black border-t-2 border-slate-300">
@@ -276,12 +258,6 @@ export default function Page() {
                 <td className="px-1 py-2 text-center text-[#2563eb]">{money(totals.gasto)}</td>
                 <td className="px-1 py-2 text-center text-[#2563eb]">{money(totals.caja)}</td>
                 <td className="px-1 py-2 text-center text-emerald-700">{money(totals.ganancia)}</td>
-                <td className="px-1 py-2 text-center text-[#2563eb]">{totals.dMerca}%</td>
-                <td className="px-1 py-2 text-center text-[#2563eb]">{totals.dDinero}%</td>
-                <td className="px-1 py-2 text-center text-[#2563eb]">{totals.cuentas}</td>
-                <td className="px-1 py-2 text-center text-[#2563eb]">{totals.cnl}</td>
-                <td className="px-1 py-2 text-center text-[#2563eb]">{totals.unidades}</td>
-                <td className="px-1 py-2 text-center text-[#2563eb]">{totals.pctEfect}%</td>
               </tr>
             </tbody>
           </table>
