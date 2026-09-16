@@ -2,9 +2,24 @@
 
 import { useEffect, useState } from 'react';
 import { getToken } from '@/lib/auth';
+import { todayBogotaKey, bogotaDayKey } from '@/lib/dates';
 
 function money(n) {
   return `$ ${Number(n || 0).toLocaleString('es-CO')}`;
+}
+
+// El backend devuelve una fila por (visita x pago); se fusiona por visita
+// sumando abonos y recalculando deuda = venta - abono total.
+function mergeVisits(rows) {
+  const map = new Map();
+  for (const v of Array.isArray(rows) ? rows : []) {
+    if (!v?.id) continue;
+    const cur = map.get(v.id) || { ...v, abono: 0 };
+    cur.abono = Number(cur.abono || 0) + Number(v.abono || 0);
+    if (cur.venta === undefined || cur.venta === null) cur.venta = v.venta;
+    map.set(v.id, cur);
+  }
+  return [...map.values()].map((v) => ({ ...v, deuda: Number(v.venta || 0) - Number(v.abono || 0) }));
 }
 
 export default function Page() {
@@ -23,6 +38,11 @@ export default function Page() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
+  // Abono posterior sobre una visita ya registrada
+  const [abonoTarget, setAbonoTarget] = useState(null);
+  const [abonoMonto, setAbonoMonto] = useState('');
+  const [abonoMetodo, setAbonoMetodo] = useState('Efectivo');
+  const [abonoSaving, setAbonoSaving] = useState(false);
 
   const hoy = new Date();
   const hoyDia = hoy.getDay(); // 0-6
@@ -106,7 +126,7 @@ export default function Page() {
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
       const cob = cobros.find((c) => c.id === cobId);
       if (!cob) return;
-      const hoyISO = new Date().toISOString().split('T')[0];
+      const hoyISO = todayBogotaKey();
       const res = await fetch(`/api/visits?sellerId=${cob.seller_id}&cobroId=${cobId}&date=${hoyISO}`, { credentials: 'include', headers });
       const data = await res.json();
       const all = Array.isArray(data) ? data : [];
@@ -115,13 +135,65 @@ export default function Page() {
         const res2 = await fetch(`/api/visits?sellerId=${cob.seller_id}`, { credentials: 'include', headers });
         const data2 = await res2.json();
         const all2 = Array.isArray(data2) ? data2 : [];
-        const filtered2 = all2.filter((v) => String(v.visit_date || v.created_at || '').slice(0, 10) === hoyISO);
-        setVisitas(filtered2.slice(0, 20));
+        const filtered2 = all2.filter((v) => bogotaDayKey(v.visit_date || v.created_at) === hoyISO);
+        setVisitas(mergeVisits(filtered2).slice(0, 20));
       } else {
-        setVisitas(all);
+        setVisitas(mergeVisits(all));
       }
     } catch {}
   }
+
+  async function handleAbono(e) {
+    e.preventDefault();
+    if (!abonoTarget) return;
+    const val = Number(abonoMonto || 0);
+    if (!Number.isFinite(val) || val <= 0) {
+      setErr('Ingresa un abono mayor a 0.');
+      return;
+    }
+    if (val > Number(abonoTarget.deuda || 0)) {
+      setErr(`El abono ($ ${val.toLocaleString('es-CO')}) supera la deuda ($ ${Number(abonoTarget.deuda || 0).toLocaleString('es-CO')}).`);
+      return;
+    }
+    setAbonoSaving(true);
+    setErr('');
+    setMsg('');
+    try {
+      const token = getToken();
+      const headers = { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+      const res = await fetch('/api/visits/abono', {
+        method: 'POST',
+        credentials: 'include',
+        headers,
+        body: JSON.stringify({ visit_id: abonoTarget.id, amount: val, paymentMethod: abonoMetodo }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.success === false) throw new Error(data.error || data.message || `Error ${res.status}`);
+      setMsg(`Abono registrado ✓ $ ${val.toLocaleString('es-CO')} · deuda restante $ ${Number(data.deuda || 0).toLocaleString('es-CO')}`);
+      setAbonoTarget(null);
+      setAbonoMonto('');
+      await loadVisitasForCobro(selectedCobro);
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setAbonoSaving(false);
+    }
+  }
+
+  // Deuda por cliente (agrupa visitas del día): cuánto debe cada uno
+  const deudaPorCliente = (() => {
+    const map = new Map();
+    for (const v of visitas) {
+      const key = v.cliente_id || v.cliente || v.id;
+      const cur = map.get(key) || { nombre: v.cliente || 'Cliente', venta: 0, abono: 0 };
+      cur.venta += Number(v.venta || 0);
+      cur.abono += Number(v.abono || 0);
+      map.set(key, cur);
+    }
+    return [...map.values()]
+      .map((c) => ({ ...c, deuda: c.venta - c.abono }))
+      .sort((a, b) => b.deuda - a.deuda);
+  })();
 
   // Cargar visitas del cobro para el día
   useEffect(() => {
@@ -326,12 +398,13 @@ export default function Page() {
         <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
           <h3 className="text-sm font-bold text-slate-900">Visitas registradas del cobro: {cobroActual?.name || '—'}</h3>
           <p className="text-xs text-slate-500 mb-3">Vendedor: {cobroActual?.seller_name || '—'} · {visitas.length} visitas hoy</p>
-          <div className="bg-[#2563eb] text-white text-[11px] font-bold grid grid-cols-5 px-2 py-2 rounded-t-lg">
+          <div className="bg-[#2563eb] text-white text-[11px] font-bold grid grid-cols-6 px-2 py-2 rounded-t-lg">
             <span>CLIENTE</span>
             <span>ANTERIOR</span>
             <span>VENTA</span>
             <span>ABONO</span>
             <span>DEUDA</span>
+            <span className="text-center">ACCIÓN</span>
           </div>
           <div className="border border-slate-200 rounded-b-lg overflow-auto max-h-[320px]">
             {visitas.length === 0 ? (
@@ -348,6 +421,19 @@ export default function Page() {
                       <td className="px-2 py-2 text-center font-bold text-slate-900">{money(v.venta)}</td>
                       <td className="px-2 py-2 text-center font-bold text-emerald-600">{money(v.abono)}</td>
                       <td className={`px-2 py-2 text-center font-bold ${Number(v.deuda) > 0 ? 'text-red-600' : 'text-slate-600'}`}>{money(v.deuda)}</td>
+                      <td className="px-2 py-2 text-center">
+                        {Number(v.deuda) > 0 ? (
+                          <button
+                            onClick={() => { setErr(''); setMsg(''); setAbonoMonto(String(Number(v.deuda || 0))); setAbonoMetodo('Efectivo'); setAbonoTarget(v); }}
+                            className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold"
+                            title={`Abonar a ${v.cliente || 'cliente'}`}
+                          >
+                            Abonar
+                          </button>
+                        ) : (
+                          <span className="text-[11px] text-slate-400 font-bold"> Al día</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -355,8 +441,64 @@ export default function Page() {
             )}
           </div>
           <p className="text-[11px] text-slate-500 mt-2">Clientes del cobro: {clientes.length} · Productos disponibles: {productos.length}</p>
+          {deudaPorCliente.length > 0 && (
+            <div className="mt-3 border border-slate-200 rounded-lg overflow-hidden">
+              <p className="text-[11px] font-black text-slate-900 bg-slate-50 px-2 py-2">Deuda por cliente (hoy)</p>
+              <div className="divide-y divide-slate-100 max-h-[160px] overflow-auto">
+                {deudaPorCliente.map((c, i) => (
+                  <div key={i} className="flex items-center justify-between px-2 py-1.5 text-xs">
+                    <span className="font-bold text-slate-900 truncate pr-2">{c.nombre}</span>
+                    <span className={`font-black ${c.deuda > 0 ? 'text-red-600' : 'text-emerald-600'}`}>$ {c.deuda.toLocaleString('es-CO')}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11px] text-slate-500 px-2 py-1.5 bg-slate-50">
+                Total adeudado hoy: <span className="font-black text-slate-900">$ {deudaPorCliente.reduce((a, c) => a + c.deuda, 0).toLocaleString('es-CO')}</span>
+              </p>
+            </div>
+          )}
         </div>
       </div>
+
+      {abonoTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setAbonoTarget(null)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="p-4 border-b border-slate-200">
+              <h3 className="font-black text-slate-900">Registrar abono</h3>
+              <p className="text-xs text-slate-500 mt-1">
+                {abonoTarget.cliente || 'Cliente'} · Venta $ {Number(abonoTarget.venta || 0).toLocaleString('es-CO')} · Deuda $ {Number(abonoTarget.deuda || 0).toLocaleString('es-CO')}
+              </p>
+            </div>
+            <form onSubmit={handleAbono} className="p-4 space-y-3">
+              <div>
+                <label className="text-xs font-bold text-slate-700">Monto del abono *</label>
+                <input required type="number" min="1" max={Number(abonoTarget.deuda || 0)} step="1" autoFocus value={abonoMonto} onChange={(e) => setAbonoMonto(e.target.value)} placeholder="Ej: 20000" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 font-bold bg-white mt-1" />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700">Método</label>
+                <div className="grid grid-cols-4 gap-1 mt-1">
+                  {['Efectivo', 'Nequi', 'Transferencia', 'Tarjeta'].map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setAbonoMetodo(m)}
+                      className={`py-2 rounded-lg text-[11px] font-bold ${abonoMetodo === m ? 'bg-[#2563eb] text-white' : 'bg-white border border-slate-200 text-slate-600'}`}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {err && <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{err}</p>}
+              <div className="flex gap-2 justify-end pt-1">
+                <button type="button" onClick={() => setAbonoTarget(null)} className="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-bold">Cancelar</button>
+                <button type="submit" disabled={abonoSaving} className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold disabled:opacity-60">{abonoSaving ? 'Guardando...' : 'Guardar abono'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

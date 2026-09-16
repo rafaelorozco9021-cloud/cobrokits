@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { getToken } from '@/lib/auth';
+import { bogotaDayKey } from '@/lib/dates';
 
 function money(n) {
   const v = Number(n || 0);
@@ -25,7 +26,7 @@ export default function Page() {
     return () => { clearInterval(t); window.removeEventListener('focus', onFocus); document.removeEventListener('visibilitychange', onVis); };
   }, []);
 
-  const isoDate = selectedDate.toISOString().split('T')[0];
+  const isoDate = bogotaDayKey(selectedDate);
   const label = selectedDate.toLocaleDateString('es-CO', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
 
   useEffect(() => {
@@ -48,12 +49,12 @@ export default function Page() {
   }, [isoDate, tick]);
 
   const perSeller = useMemo(() => {
-    const dayVisits = (data.visits || []).filter((v) => String(v.visit_date || v.created_at || '').slice(0, 10) === isoDate);
+    const dayVisits = (data.visits || []).filter((v) => bogotaDayKey(v.visit_date || v.created_at) === isoDate);
     // Deuda acumulada por vendedor hasta la fecha seleccionada (saldo anterior)
     const debtBySeller = new Map();
     for (const v of data.visits || []) {
-      const vdate = String(v.visit_date || v.created_at || '').slice(0, 10);
-      if (vdate <= isoDate && Number(v.deuda || 0) > 0) {
+      const vdate = bogotaDayKey(v.visit_date || v.created_at);
+      if (vdate && vdate <= isoDate && Number(v.deuda || 0) > 0) {
         const sid = v.seller_id;
         debtBySeller.set(sid, (debtBySeller.get(sid) || 0) + Number(v.deuda));
       }

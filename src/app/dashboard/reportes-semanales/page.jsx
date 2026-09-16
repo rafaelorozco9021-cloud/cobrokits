@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { getToken } from '@/lib/auth';
+import { bogotaDayKey } from '@/lib/dates';
 
 function money(n) {
   const v = Number(n || 0);
@@ -130,11 +131,11 @@ export default function Page() {
   const perDay = useMemo(() => {
     let runningDebt = 0;
     return days.map((d) => {
-      const iso = d.toISOString().split('T')[0];
-      // Visitas de ese día
-      const dayVisits = (data.visits || []).filter((v) => String(v.visit_date || v.created_at || '').slice(0, 10) === iso);
+      const iso = bogotaDayKey(d);
+      // Visitas de ese día (día calendario Bogotá, igual en todos los reportes)
+      const dayVisits = (data.visits || []).filter((v) => bogotaDayKey(v.visit_date || v.created_at) === iso);
       // Calcular efectivo/nequi/total desde visits (cada visita tiene abono y payment_method)
-      const dayPayments = (data.payments || []).filter((p) => String(p.created_at || p.visit_date || '').slice(0, 10) === iso);
+      const dayPayments = (data.payments || []).filter((p) => bogotaDayKey(p.created_at || p.visit_date) === iso);
       const efectivoVisits = dayVisits.filter((v) => String(v.payment_method || '').toLowerCase() === 'efectivo').reduce((a, v) => a + Number(v.abono || 0), 0);
       const nequiVisits = dayVisits.filter((v) => String(v.payment_method || '').toLowerCase() === 'nequi').reduce((a, v) => a + Number(v.abono || 0), 0);
       const otrosVisits = dayVisits.filter((v) => !['efectivo', 'nequi'].includes(String(v.payment_method || '').toLowerCase())).reduce((a, v) => a + Number(v.abono || 0), 0);
