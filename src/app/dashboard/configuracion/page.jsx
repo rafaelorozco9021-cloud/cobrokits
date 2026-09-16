@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { buildAuthHeaders } from '@/lib/auth';
-import { ChevronDown, ChevronUp, Phone, Package, Users, Plus, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Phone, Package, Users, Plus, X, Pencil, Trash2 } from 'lucide-react';
 
 function Modal({ title, children, onClose }) {
   return (
@@ -36,6 +36,26 @@ export default function Page() {
   const [fSeller, setFSeller] = useState({ name: '', email: '', phone: '' });
   const [fProduct, setFProduct] = useState({ name: '', description: '', cost_price: '', price: '', category: 'embutidos', stock: '' });
   const [fCustomer, setFCustomer] = useState({ name: '', phone: '', email: '', address: '', cobro_id: '' });
+
+  // Edición: item seleccionado por tipo + confirmación previa (editar / eliminar)
+  const [editKind, setEditKind] = useState(null); // 'vendedor' | 'producto' | 'cliente' | null
+  const [eSeller, setESeller] = useState({ id: '', name: '', email: '', phone: '' });
+  const [eProduct, setEProduct] = useState({ id: '', name: '', description: '', cost_price: '', price: '', category: 'general', stock: '' });
+  const [eCustomer, setECustomer] = useState({ id: '', name: '', phone: '', email: '', address: '', cobro_id: '' });
+  const [confirm, setConfirm] = useState(null); // { action:'save'|'delete', kind, id, label }
+
+  const openEdit = (kind, row) => {
+    setErr('');
+    setMsg('');
+    if (kind === 'vendedor') {
+      setESeller({ id: row.id, name: row.name || '', email: row.email || '', phone: row.phone || '' });
+    } else if (kind === 'producto') {
+      setEProduct({ id: row.id, name: row.name || '', description: row.description || '', cost_price: row.cost_price ?? row.cost ?? '', price: row.price ?? '', category: row.category || 'general', stock: row.stock ?? '' });
+    } else {
+      setECustomer({ id: row.id, name: row.name || '', phone: row.phone || '', email: row.email || '', address: row.address || '', cobro_id: row.cobro_id || '' });
+    }
+    setEditKind(kind);
+  };
 
   const onlySellers = (arr) => {
     const list = Array.isArray(arr) ? arr : [];
@@ -87,7 +107,6 @@ export default function Page() {
     } catch {}
     setLoading((v) => ({ ...v, cobros: false }));
   };
-  const cobroName = (id) => cobros.find((c) => c.id === id)?.name || '—';
 
   useEffect(() => {
     loadSellers();
@@ -179,6 +198,67 @@ export default function Page() {
     }
   }
 
+  async function doConfirm() {
+    if (!confirm) return;
+    const { action, kind, id } = confirm;
+    setSaving(true);
+    setErr('');
+    setMsg('');
+    try {
+      const headers = buildAuthHeaders({ 'Content-Type': 'application/json' });
+      if (action === 'delete') {
+        const url = kind === 'vendedor' ? `/api/sellers?id=${id}` : kind === 'producto' ? `/api/products?id=${id}` : `/api/customers?id=${id}`;
+        const res = await fetch(url, { method: 'DELETE', credentials: 'include', headers });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.success === false) throw new Error(data.error || data.message || `Error ${res.status}`);
+        setMsg(`${confirm.label} eliminado`);
+      } else {
+        if (kind === 'vendedor') {
+          const res = await fetch('/api/sellers', { method: 'PATCH', credentials: 'include', headers, body: JSON.stringify({ id, name: eSeller.name, email: eSeller.email, phone: eSeller.phone }) });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data.success === false) throw new Error(data.error || data.message || `Error ${res.status}`);
+          setMsg(`Vendedor "${eSeller.name}" actualizado`);
+        } else if (kind === 'producto') {
+          const res = await fetch('/api/products', {
+            method: 'PATCH', credentials: 'include', headers,
+            body: JSON.stringify({ id, name: eProduct.name, description: eProduct.description, cost_price: Number(eProduct.cost_price || 0), price: Number(eProduct.price || 0), category: eProduct.category, stock: eProduct.stock === '' ? undefined : Number(eProduct.stock) }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data.success === false) throw new Error(data.error || data.message || `Error ${res.status}`);
+          setMsg(`Producto "${eProduct.name}" actualizado`);
+        } else {
+          const res = await fetch('/api/customers', {
+            method: 'POST', credentials: 'include', headers,
+            body: JSON.stringify({ id, name: eCustomer.name, phone: eCustomer.phone, email: eCustomer.email, address: eCustomer.address, cobro_id: eCustomer.cobro_id || null }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data.success === false) throw new Error(data.error || data.message || `Error ${res.status}`);
+          setMsg(`Cliente "${eCustomer.name}" actualizado`);
+        }
+      }
+      setConfirm(null);
+      setEditKind(null);
+      loadSellers();
+      loadProducts();
+      loadCustomers();
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const Actions = ({ kind, row, label }) => (
+    <div className="inline-flex items-center gap-1">
+      <button onClick={() => openEdit(kind, row)} title={`Editar ${label}`} className="w-7 h-7 rounded-lg bg-blue-50 text-[#2563eb] hover:bg-blue-100 inline-flex items-center justify-center">
+        <Pencil className="w-3.5 h-3.5" />
+      </button>
+      <button onClick={() => { setErr(''); setMsg(''); setConfirm({ action: 'delete', kind, id: row.id, label: `${label} "${row.name}"` }); }} title={`Eliminar ${label}`} className="w-7 h-7 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 inline-flex items-center justify-center">
+        <Trash2 className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+
   const Section = ({ id, title, count, icon: Icon, children }) => {
     const isOpen = open === id;
     return (
@@ -246,7 +326,7 @@ export default function Page() {
                     <td className="px-3 py-2 text-center">
                       <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${s.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{s.status}</span>
                     </td>
-                    <td className="px-3 py-2 text-center text-slate-400">✎ 🗑</td>
+                    <td className="px-3 py-2 text-center"><Actions kind="vendedor" row={s} label="vendedor" /></td>
                   </tr>
                 ))}
               </tbody>
@@ -291,7 +371,7 @@ export default function Page() {
                     <td className="px-2 py-2 text-center">
                       <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[11px]">{p.category || 'general'}</span>
                     </td>
-                    <td className="px-2 py-2 text-center text-slate-400">✎ 🗑</td>
+                    <td className="px-2 py-2 text-center"><Actions kind="producto" row={p} label="producto" /></td>
                   </tr>
                 ))}
               </tbody>
@@ -318,7 +398,6 @@ export default function Page() {
                   <th className="px-3 py-2 text-left">NOMBRE</th>
                   <th className="px-2 py-2 text-center">TELÉFONO</th>
                   <th className="px-2 py-2 text-left">DIRECCIÓN</th>
-                  <th className="px-2 py-2 text-center">COBRO</th>
                   <th className="px-2 py-2 text-center">ACCIONES</th>
                 </tr>
               </thead>
@@ -328,8 +407,7 @@ export default function Page() {
                     <td className="px-3 py-2 font-bold text-slate-900">{c.name}</td>
                     <td className="px-2 py-2 text-center font-mono text-slate-700">{c.phone || '—'}</td>
                     <td className="px-2 py-2 text-slate-600 truncate max-w-[200px]">{c.address || '—'}</td>
-                    <td className="px-2 py-2 text-center text-slate-600">{c.cobro_id ? cobroName(c.cobro_id) : '—'}</td>
-                    <td className="px-2 py-2 text-center text-slate-400">✎ 🗑</td>
+                    <td className="px-2 py-2 text-center"><Actions kind="cliente" row={c} label="cliente" /></td>
                   </tr>
                 ))}
               </tbody>
@@ -448,6 +526,118 @@ export default function Page() {
               <button type="submit" disabled={saving} className="px-4 py-2 rounded-lg bg-[#2563eb] text-white text-sm font-bold disabled:opacity-60">{saving ? 'Guardando...' : 'Guardar'}</button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {editKind === 'vendedor' && (
+        <Modal title="Editar Vendedor" onClose={() => setEditKind(null)}>
+          <form onSubmit={(e) => { e.preventDefault(); setConfirm({ action: 'save', kind: 'vendedor', id: eSeller.id, label: `vendedor "${eSeller.name}"` }); }} className="space-y-3">
+            <div>
+              <label className="text-xs font-bold text-slate-700">Nombre *</label>
+              <input required value={eSeller.name} onChange={(e) => setESeller({ ...eSeller, name: e.target.value })} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 bg-white mt-1" />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-700">Email *</label>
+              <input required type="email" value={eSeller.email} onChange={(e) => setESeller({ ...eSeller, email: e.target.value })} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 bg-white mt-1" />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-700">Teléfono</label>
+              <input value={eSeller.phone} onChange={(e) => setESeller({ ...eSeller, phone: e.target.value })} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 bg-white mt-1" />
+            </div>
+            <div className="flex gap-2 justify-end pt-2">
+              <button type="button" onClick={() => setEditKind(null)} className="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-bold">Cancelar</button>
+              <button type="submit" className="px-4 py-2 rounded-lg bg-[#2563eb] text-white text-sm font-bold">Guardar cambios</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {editKind === 'producto' && (
+        <Modal title="Editar Producto" onClose={() => setEditKind(null)}>
+          <form onSubmit={(e) => { e.preventDefault(); setConfirm({ action: 'save', kind: 'producto', id: eProduct.id, label: `producto "${eProduct.name}"` }); }} className="space-y-3">
+            <div>
+              <label className="text-xs font-bold text-slate-700">Nombre *</label>
+              <input required value={eProduct.name} onChange={(e) => setEProduct({ ...eProduct, name: e.target.value })} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 bg-white mt-1" />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-700">Descripción</label>
+              <input value={eProduct.description} onChange={(e) => setEProduct({ ...eProduct, description: e.target.value })} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 bg-white mt-1" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-bold text-slate-700">Costo *</label>
+                <input required type="number" min="0" value={eProduct.cost_price} onChange={(e) => setEProduct({ ...eProduct, cost_price: e.target.value })} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 bg-white mt-1" />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700">PVP *</label>
+                <input required type="number" min="0" value={eProduct.price} onChange={(e) => setEProduct({ ...eProduct, price: e.target.value })} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 bg-white mt-1" />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-700">Categoría</label>
+              <select value={eProduct.category} onChange={(e) => setEProduct({ ...eProduct, category: e.target.value })} className="w-full border border-amber-300 rounded-lg px-3 py-2 text-sm font-bold bg-amber-50 text-slate-900 mt-1">
+                <option value="embutidos">embutidos</option>
+                <option value="lacteos">lacteos</option>
+                <option value="frutos secos">frutos secos</option>
+                <option value="general">general</option>
+                <option value="alimentos">alimentos</option>
+              </select>
+            </div>
+            <div className="flex gap-2 justify-end pt-2">
+              <button type="button" onClick={() => setEditKind(null)} className="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-bold">Cancelar</button>
+              <button type="submit" className="px-4 py-2 rounded-lg bg-[#2563eb] text-white text-sm font-bold">Guardar cambios</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {editKind === 'cliente' && (
+        <Modal title="Editar Cliente" onClose={() => setEditKind(null)}>
+          <form onSubmit={(e) => { e.preventDefault(); setConfirm({ action: 'save', kind: 'cliente', id: eCustomer.id, label: `cliente "${eCustomer.name}"` }); }} className="space-y-3">
+            <div>
+              <label className="text-xs font-bold text-slate-700">Nombre *</label>
+              <input required value={eCustomer.name} onChange={(e) => setECustomer({ ...eCustomer, name: e.target.value })} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 bg-white mt-1" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-bold text-slate-700">Teléfono</label>
+                <input value={eCustomer.phone} onChange={(e) => setECustomer({ ...eCustomer, phone: e.target.value })} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 bg-white mt-1" />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700">Email</label>
+                <input type="email" value={eCustomer.email} onChange={(e) => setECustomer({ ...eCustomer, email: e.target.value })} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 bg-white mt-1" />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-700">Dirección</label>
+              <input value={eCustomer.address} onChange={(e) => setECustomer({ ...eCustomer, address: e.target.value })} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 bg-white mt-1" />
+            </div>
+            <div className="flex gap-2 justify-end pt-2">
+              <button type="button" onClick={() => setEditKind(null)} className="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-bold">Cancelar</button>
+              <button type="submit" className="px-4 py-2 rounded-lg bg-[#2563eb] text-white text-sm font-bold">Guardar cambios</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {confirm && (
+        <Modal title={confirm.action === 'delete' ? 'Confirmar eliminación' : 'Confirmar cambios'} onClose={() => setConfirm(null)}>
+          <p className="text-sm text-slate-700">
+            {confirm.action === 'delete'
+              ? <>¿Está seguro de eliminar el {confirm.label}? <span className="font-bold text-red-600">Esta acción no se puede deshacer.</span></>
+              : <>¿Está seguro de guardar los cambios del {confirm.label}?</>}
+          </p>
+          {err && <p className="mt-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{err}</p>}
+          <div className="flex gap-2 justify-end pt-4">
+            <button onClick={() => setConfirm(null)} disabled={saving} className="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-bold disabled:opacity-60">Cancelar</button>
+            <button
+              onClick={doConfirm}
+              disabled={saving}
+              className={`px-4 py-2 rounded-lg text-white text-sm font-bold disabled:opacity-60 ${confirm.action === 'delete' ? 'bg-red-600 hover:bg-red-700' : 'bg-[#2563eb] hover:bg-blue-700'}`}
+            >
+              {saving ? 'Procesando...' : confirm.action === 'delete' ? 'Sí, eliminar' : 'Sí, guardar'}
+            </button>
+          </div>
         </Modal>
       )}
     </div>
