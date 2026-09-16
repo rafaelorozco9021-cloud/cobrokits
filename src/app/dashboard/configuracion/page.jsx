@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { getToken } from '@/lib/auth';
+import { buildAuthHeaders } from '@/lib/auth';
 import { ChevronDown, ChevronUp, Phone, Package, Users, Plus, X } from 'lucide-react';
 
 function Modal({ title, children, onClose }) {
@@ -51,28 +51,17 @@ export default function Page() {
   };
 
   const loadSellers = async () => {
-    const token = getToken();
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const headers = buildAuthHeaders();
     try {
-      // Fuente principal: /api/sellers (ya filtra role='seller' en backend)
+      // Fuente principal: /api/sellers (backend aísla por tenant X-Tenant-Slug/X-Tenant-Id).
+      // NO usar /api/auth como fallback: ese endpoint es global y mezclaba empresas.
       const r2 = await fetch('/api/sellers', { credentials: 'include', headers }).then((r) => r.json().catch(() => []));
-      const sellersOnly = onlySellers(r2);
-      if (sellersOnly.length > 0 || (Array.isArray(r2) && r2.length === 0)) {
-        setSellers(sellersOnly);
-      } else {
-        const res = await fetch('/api/auth', { credentials: 'include', headers });
-        const data = await res.json();
-        const list = Array.isArray(data) ? data : [];
-        if (list.length === 0 || list[0]?.stub) {
-          setSellers(sellersOnly);
-        } else setSellers(onlySellers(list));
-      }
+      setSellers(onlySellers(r2));
     } catch {}
     setLoading((v) => ({ ...v, sellers: false }));
   };
   const loadProducts = async () => {
-    const token = getToken();
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const headers = buildAuthHeaders();
     try {
       const res = await fetch('/api/products', { credentials: 'include', headers });
       const data = await res.json();
@@ -81,8 +70,7 @@ export default function Page() {
     setLoading((v) => ({ ...v, products: false }));
   };
   const loadCustomers = async () => {
-    const token = getToken();
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const headers = buildAuthHeaders();
     try {
       const res = await fetch('/api/customers', { credentials: 'include', headers });
       const data = await res.json();
@@ -91,8 +79,7 @@ export default function Page() {
     setLoading((v) => ({ ...v, customers: false }));
   };
   const loadCobros = async () => {
-    const token = getToken();
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const headers = buildAuthHeaders();
     try {
       const res = await fetch('/api/cobros', { credentials: 'include', headers });
       const data = await res.json();
@@ -121,8 +108,7 @@ export default function Page() {
     setErr('');
     setMsg('');
     try {
-      const token = getToken();
-      const headers = { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+      const headers = buildAuthHeaders({ 'Content-Type': 'application/json' });
       const res = await fetch('/api/sellers', { method: 'POST', credentials: 'include', headers, body: JSON.stringify(fSeller) });
       const data = await res.json();
       if (!res.ok || data.success === false) throw new Error(data.error || data.message || `Error ${res.status}`);
@@ -143,8 +129,7 @@ export default function Page() {
     setErr('');
     setMsg('');
     try {
-      const token = getToken();
-      const headers = { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+      const headers = buildAuthHeaders({ 'Content-Type': 'application/json' });
       const payload = {
         name: fProduct.name,
         description: fProduct.description,
@@ -177,8 +162,7 @@ export default function Page() {
     setErr('');
     setMsg('');
     try {
-      const token = getToken();
-      const headers = { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+      const headers = buildAuthHeaders({ 'Content-Type': 'application/json' });
       // El cliente pertenece a un cobro; el backend deriva el vendedor del cobro.
       const payload = { name: fCustomer.name, phone: fCustomer.phone, email: fCustomer.email, address: fCustomer.address, cobro_id: fCustomer.cobro_id };
       const res = await fetch('/api/customers', { method: 'POST', credentials: 'include', headers, body: JSON.stringify(payload) });

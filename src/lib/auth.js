@@ -146,9 +146,7 @@ export async function loginViaProxy(email, password, onStatus) {
 export async function fetchDashboard(action = 'overview') {
   const token = getToken();
   const url = `/api/dashboard?action=${encodeURIComponent(action)}`;
-  const headers = {};
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-  try { const u=getUser(); const tid=u?.empresa_id||u?.id; if(tid) headers['X-Tenant-Id']=tid; } catch {}
+  const headers = buildAuthHeaders(token ? { Authorization: `Bearer ${token}` } : {});
   const res = await fetch(url, {
     credentials: 'include',
     headers,
@@ -158,6 +156,39 @@ export async function fetchDashboard(action = 'overview') {
     throw new Error(data.error || data.message || `Error ${res.status}`);
   }
   return data;
+}
+
+export function getTenantSlugFromHost() {
+  try {
+    if (typeof window === 'undefined') return null;
+    const host = window.location.hostname.toLowerCase();
+    if (host === 'localhost' || host === '127.0.0.1' || host === 'cobrokits.online' || host === 'www.cobrokits.online' || host.endsWith('.vercel.app')) return null;
+    if (host.endsWith('.cobrokits.online')) {
+      const sub = host.replace('.cobrokits.online', '').trim();
+      if (sub && sub !== 'www' && !sub.includes('.')) return sub;
+    }
+  } catch {}
+  return null;
+}
+
+// Headers multiempresa: Authorization + X-Tenant-Slug (subdominio) + X-Tenant-Id (empresa del JWT/user).
+// Usar en TODAS las páginas de /dashboard para que el backend aisle por schema/empresa.
+export function buildAuthHeaders(extra = {}) {
+  const headers = { ...extra };
+  try {
+    const token = getToken();
+    if (token && !headers['Authorization']) headers['Authorization'] = `Bearer ${token}`;
+  } catch {}
+  try {
+    const slug = getTenantSlugFromHost();
+    if (slug) headers['X-Tenant-Slug'] = slug;
+  } catch {}
+  try {
+    const u = getUser();
+    const tid = u?.empresa_id || (u?.role === 'empresa' ? u?.id : null) || u?.id;
+    if (tid) headers['X-Tenant-Id'] = tid;
+  } catch {}
+  return headers;
 }
 
 export async function logoutViaProxy() {

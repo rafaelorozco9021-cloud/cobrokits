@@ -19,7 +19,7 @@ import {
   X,
   ChevronDown,
 } from 'lucide-react';
-import { getToken, getUser, saveUser, clearToken, clearAuthCookies } from '@/lib/auth';
+import { getToken, getUser, saveUser, clearToken, clearAuthCookies, getTenantSlugFromHost } from '@/lib/auth';
 
 const nav = [
   { href: '/dashboard', label: 'Inicio', icon: Home, exact: true },
@@ -43,6 +43,39 @@ export default function DashboardLayout({ children }) {
   const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
+    // Parche global anti-fuga multiempresa: todo fetch a /api inyecta
+    // X-Tenant-Slug (subdominio) + X-Tenant-Id (empresa del usuario).
+    // Cubre páginas legacy que solo enviaban Authorization.
+    try {
+      if (typeof window !== 'undefined' && !window.__ckTenantFetchPatched) {
+        window.__ckTenantFetchPatched = true;
+        const origFetch = window.fetch.bind(window);
+        window.fetch = (input, init = {}) => {
+          try {
+            const url = typeof input === 'string' ? input : input?.url || '';
+            if (url.startsWith('/api/')) {
+              const headers = new Headers(init.headers || (typeof input !== 'string' ? input.headers : undefined) || {});
+              if (!headers.has('X-Tenant-Slug')) {
+                const slug = getTenantSlugFromHost();
+                if (slug) headers.set('X-Tenant-Slug', slug);
+              }
+              if (!headers.has('X-Tenant-Id')) {
+                try {
+                  const raw = localStorage.getItem('cobrokits_user');
+                  if (raw) {
+                    const u = JSON.parse(raw);
+                    const tid = u?.empresa_id || (u?.role === 'empresa' ? u?.id : null) || u?.id;
+                    if (tid) headers.set('X-Tenant-Id', tid);
+                  }
+                } catch {}
+              }
+              init = { ...init, headers };
+            }
+          } catch {}
+          return origFetch(input, init);
+        };
+      }
+    } catch {}
     // localStorage no se comparte entre subdominios: la fuente real es /api/auth/me (cookie httpOnly o Bearer)
     (async () => {
       try {

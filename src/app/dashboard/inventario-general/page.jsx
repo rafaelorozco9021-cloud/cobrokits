@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getToken } from '@/lib/auth';
+import { buildAuthHeaders } from '@/lib/auth';
 
 function money(n) {
   const v = Number(n || 0);
@@ -38,9 +38,7 @@ export default function Page() {
     setLoading(true);
     setError('');
     try {
-      const token = getToken();
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      console.log('[inventario] fetching with token', token ? token.slice(0, 10) + '...' : 'none');
+      const headers = buildAuthHeaders();
       let prodRaw = await fetch('/api/products', { credentials: 'include', headers });
       let prodText = await prodRaw.text();
       console.log('[inventario] /api/products status', prodRaw.status, prodText.slice(0, 200));
@@ -123,8 +121,7 @@ export default function Page() {
     setError('');
     setMsg('');
     try {
-      const token = getToken();
-      const headers = { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+      const headers = buildAuthHeaders({ 'Content-Type': 'application/json' });
       const payload = {
         name: fProduct.name.trim(),
         description: fProduct.description.trim(),
