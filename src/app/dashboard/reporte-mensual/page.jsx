@@ -112,20 +112,16 @@ export default function Page() {
       const dayPayments = (data.payments || []).filter((p) => bogotaDayKey(p.created_at || p.visit_date) === iso);
       const efectivoVisits = dayVisits.filter((v) => String(v.payment_method || '').toLowerCase() === 'efectivo').reduce((a, v) => a + Number(v.abono || 0), 0);
       const nequiVisits = dayVisits.filter((v) => String(v.payment_method || '').toLowerCase() === 'nequi').reduce((a, v) => a + Number(v.abono || 0), 0);
-      const otrosVisits = dayVisits.filter((v) => !['efectivo', 'nequi'].includes(String(v.payment_method || '').toLowerCase())).reduce((a, v) => a + Number(v.abono || 0), 0);
       let efectivo = efectivoVisits;
       let nequi = nequiVisits;
-      let otros = otrosVisits;
-      let total = efectivo + nequi + otros;
+      let total = efectivo + nequi;
       if (total === 0 && dayPayments.length > 0) {
         const f = dayPayments.filter((p) => String(p.payment_method || '').toLowerCase() === 'efectivo').reduce((a, p) => a + Number(p.amount || 0), 0);
         const n = dayPayments.filter((p) => String(p.payment_method || '').toLowerCase() === 'nequi').reduce((a, p) => a + Number(p.amount || 0), 0);
-        const o = dayPayments.filter((p) => !['efectivo', 'nequi'].includes(String(p.payment_method || '').toLowerCase())).reduce((a, p) => a + Number(p.amount || 0), 0);
-        if (f + n + o > 0) {
+        if (f + n > 0) {
           efectivo = f;
           nequi = n;
-          otros = o;
-          total = f + n + o;
+          total = f + n;
         }
       }
 
@@ -162,7 +158,7 @@ export default function Page() {
       const cobros = tieneVenta ? ventasNuevasHoy + entregaPrevMonth : 0;
       // COSTO CLL = Σ(cantidad × precio_venta) de todos los productos vendidos hoy
       const costoCll = venta;
-      const entrega = venta;
+      const entrega = (saldoAnt + cobros) - total;
       const gasto = 0;
       const caja = total - gasto;
       const ganancia = total - costo;
@@ -256,8 +252,8 @@ export default function Page() {
                 <ThWithTooltip tip="COSTO CLL. = Σ(cantidad × precio_venta) de todos los productos vendidos hoy. Valor de venta.">COSTO CLL.</ThWithTooltip>
                 <ThWithTooltip tip="Recaudo en efectivo. Fórmula: SUM(abono WHERE payment_method='efectivo').">EFECTIVO</ThWithTooltip>
                 <ThWithTooltip tip="Recaudo por Nequi. Fórmula: SUM(abono WHERE payment_method='nequi').">NEQUI</ThWithTooltip>
-                <ThWithTooltip tip="Total recaudado. Fórmula: TOTAL = EFECTIVO + NEQUI + OTROS.">TOTAL</ThWithTooltip>
-                <ThWithTooltip tip="Valor de mercancía entregada / vendida. Fórmula: ENTREGA = VENTA = SUM(cantidad × precio_venta).">ENTREGA</ThWithTooltip>
+                <ThWithTooltip tip="TOTAL = EFECTIVO + NEQUI. Solo efectivo y Nequi.">TOTAL</ThWithTooltip>
+                <ThWithTooltip tip="ENTREGA = (SALDO ANT. + COBROS) − TOTAL. Si TOTAL sube, ENTREGA baja.">ENTREGA</ThWithTooltip>
                 <ThWithTooltip tip="Gastos del día (editable). Fórmula: valor manual.">GASTO</ThWithTooltip>
                 <ThWithTooltip tip="Caja. Fórmula: $ = TOTAL - GASTO."> $</ThWithTooltip>
                 <ThWithTooltip tip="Ganancia neta. Fórmula: GANANCIA = TOTAL - COSTO." className="bg-emerald-500">GANANCIA</ThWithTooltip>

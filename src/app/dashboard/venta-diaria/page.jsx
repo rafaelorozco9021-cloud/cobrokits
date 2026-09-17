@@ -97,7 +97,7 @@ export default function Page() {
       const cobros = tieneVenta ? ventasNuevasHoy + (entregaPrevBySeller.get(sid) || 0) : 0; // Ventas nuevas + SALDO ANT.
       const efectivo = group.visits.filter((v) => String(v.payment_method || '').toLowerCase() === 'efectivo').reduce((a, v) => a + Number(v.abono || 0), 0);
       const nequi = group.visits.filter((v) => String(v.payment_method || '').toLowerCase() === 'nequi').reduce((a, v) => a + Number(v.abono || 0), 0);
-      const total = efectivo + nequi + group.visits.filter((v) => !['efectivo', 'nequi'].includes(String(v.payment_method || '').toLowerCase())).reduce((a, v) => a + Number(v.abono || 0), 0);
+      const total = efectivo + nequi;
       // Costo de inversión = Σ(cantidad × costo_unitario) de todos los productos vendidos hoy por ese vendedor
       let costo = group.visits.reduce((a, v) => a + Number(v.costo || 0), 0);
       if (costo === 0 && data.items && data.items.length > 0) {
@@ -110,7 +110,7 @@ export default function Page() {
         }
       }
       const costoCll = venta; // Valor de venta = Σ(cantidad × precio_venta)
-      const entrega = venta;
+      const entrega = (saldoAnt + cobros) - total;
       const gasto = 0;
       const caja = total - gasto;
       const ganancia = total - costo;
@@ -179,8 +179,8 @@ export default function Page() {
                 <ThWithTooltip tip="COSTO CLL. = Σ(cantidad × precio_venta) de todos los productos vendidos hoy por ese vendedor. Valor de venta.">COSTO CLL.</ThWithTooltip>
                 <ThWithTooltip tip="Recaudo en efectivo de ese vendedor. Fórmula: SUM(abono WHERE payment_method='efectivo').">EFECTIVO</ThWithTooltip>
                 <ThWithTooltip tip="Recaudo por Nequi de ese vendedor. Fórmula: SUM(abono WHERE payment_method='nequi').">NEQUI</ThWithTooltip>
-                <ThWithTooltip tip="Total recaudado por ese vendedor. Fórmula: TOTAL = EFECTIVO + NEQUI + OTROS.">TOTAL</ThWithTooltip>
-                <ThWithTooltip tip="Valor de mercancía entregada / vendida por ese vendedor. Fórmula: ENTREGA = VENTA = SUM(cantidad × precio_venta).">ENTREGA</ThWithTooltip>
+                <ThWithTooltip tip="TOTAL = EFECTIVO + NEQUI. Solo efectivo y Nequi.">TOTAL</ThWithTooltip>
+                <ThWithTooltip tip="ENTREGA = (SALDO ANT. + COBROS) − TOTAL.">ENTREGA</ThWithTooltip>
                 <ThWithTooltip tip="Gastos del día del vendedor (editable). Fórmula: valor manual. Afecta a $">GASTO</ThWithTooltip>
                 <ThWithTooltip tip="Caja de ese vendedor. Fórmula: $ = TOTAL - GASTO."> $</ThWithTooltip>
                 <ThWithTooltip tip="Ganancia de ese vendedor. Fórmula: GANANCIA = TOTAL - COSTO.">GANANCIA</ThWithTooltip>
