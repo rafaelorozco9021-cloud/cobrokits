@@ -108,6 +108,7 @@ export default function Page() {
           costo = sellerItems.reduce((a, it) => a + Number(it.quantity || 0) * Number(prodMap.get(it.product_id) || 0), 0);
         }
       }
+      const costoCll = venta; // Valor de venta = Σ(cantidad × precio_venta)
       const entrega = venta;
       const gasto = 0;
       const caja = total - gasto;
@@ -118,7 +119,7 @@ export default function Page() {
         saldoAnt,
         cobros,
         costo,
-        costoCll: costo,
+        costoCll,
         efectivo,
         nequi,
         total,
@@ -174,7 +175,7 @@ export default function Page() {
                 <ThWithTooltip tip="SALDO ANT. = ENTREGA semana pasada por vendedor. Fórmula: SALDO ANT. = Σ(line_sale_total) de la semana anterior.">SALDO ANT.</ThWithTooltip>
                 <ThWithTooltip tip="COBROS = Ventas nuevas hoy + SALDO ANT. Fórmula: COBROS = Σ(line_sale_total del vendedor hoy) + ENTREGA semana pasada.">COBROS</ThWithTooltip>
                 <ThWithTooltip tip="Costo de inversión = Σ(cantidad × costo_unitario) de todos los productos vendidos hoy por ese vendedor. Suma del costo que pagó el admin.">COSTO</ThWithTooltip>
-                <ThWithTooltip tip="Costo calle. Fórmula: COSTO CLL. = COSTO.">COSTO CLL.</ThWithTooltip>
+                <ThWithTooltip tip="COSTO CLL. = Σ(cantidad × precio_venta) de todos los productos vendidos hoy por ese vendedor. Valor de venta.">COSTO CLL.</ThWithTooltip>
                 <ThWithTooltip tip="Recaudo en efectivo de ese vendedor. Fórmula: SUM(abono WHERE payment_method='efectivo').">EFECTIVO</ThWithTooltip>
                 <ThWithTooltip tip="Recaudo por Nequi de ese vendedor. Fórmula: SUM(abono WHERE payment_method='nequi').">NEQUI</ThWithTooltip>
                 <ThWithTooltip tip="Total recaudado por ese vendedor. Fórmula: TOTAL = EFECTIVO + NEQUI + OTROS.">TOTAL</ThWithTooltip>

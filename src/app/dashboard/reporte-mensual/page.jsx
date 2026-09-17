@@ -153,7 +153,8 @@ export default function Page() {
       const tieneVenta = ventasNuevasHoy > 0;
       const saldoAnt = tieneVenta ? entregaPrevMonth : 0;
       const cobros = tieneVenta ? ventasNuevasHoy + entregaPrevMonth : 0;
-      const costoCll = costo;
+      // COSTO CLL = Σ(cantidad × precio_venta) de todos los productos vendidos hoy
+      const costoCll = venta;
       const entrega = venta;
       const gasto = 0;
       const caja = total - gasto;
@@ -245,7 +246,7 @@ export default function Page() {
                 <ThWithTooltip tip="SALDO ANT. = ENTREGA del mes pasado. Fórmula: SALDO ANT. = Σ(line_sale_total) del mes anterior.">SALDO ANT.</ThWithTooltip>
                 <ThWithTooltip tip="COBROS = Ventas nuevas hoy + SALDO ANT. Fórmula: COBROS = Σ(line_sale_total del día) + ENTREGA mes pasado.">COBROS</ThWithTooltip>
                 <ThWithTooltip tip="Costo de inversión = Σ(cantidad × costo_unitario) de todos los productos vendidos hoy. Suma del costo que pagó el admin por cada unidad vendida.">COSTO</ThWithTooltip>
-                <ThWithTooltip tip="Costo calle. Fórmula: COSTO CLL. = COSTO.">COSTO CLL.</ThWithTooltip>
+                <ThWithTooltip tip="COSTO CLL. = Σ(cantidad × precio_venta) de todos los productos vendidos hoy. Valor de venta.">COSTO CLL.</ThWithTooltip>
                 <ThWithTooltip tip="Recaudo en efectivo. Fórmula: SUM(abono WHERE payment_method='efectivo').">EFECTIVO</ThWithTooltip>
                 <ThWithTooltip tip="Recaudo por Nequi. Fórmula: SUM(abono WHERE payment_method='nequi').">NEQUI</ThWithTooltip>
                 <ThWithTooltip tip="Total recaudado. Fórmula: TOTAL = EFECTIVO + NEQUI + OTROS.">TOTAL</ThWithTooltip>

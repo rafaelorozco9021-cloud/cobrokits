@@ -207,7 +207,8 @@ export default function Page() {
       const saldoAnt = tieneVenta ? entregaPrevWeek : 0;
       // COBROS = Ventas nuevas HOY + SALDO ANT. Solo si hay venta, sino 0
       const cobros = tieneVenta ? ventasNuevasHoy + entregaPrevWeek : 0;
-      const costoCll = costo;
+      // COSTO CLL = Σ(cantidad × precio_venta) de todos los productos vendidos hoy (valor de venta)
+      const costoCll = venta;
       const entrega = venta;
       const gasto = 0;
       const caja = total - gasto;
@@ -300,7 +301,7 @@ export default function Page() {
                 <ThWithTooltip tip="SALDO ANT. = ENTREGA de la semana pasada. Fórmula: SALDO ANT. = Σ(line_sale_total) de toda la semana anterior. Es el crédito arrastrado.">SALDO ANT.</ThWithTooltip>
                 <ThWithTooltip tip="COBROS = Ventas nuevas a crédito HOY + SALDO ANT. Fórmula: COBROS = Σ(line_sale_total del día) + ENTREGA semana pasada.">COBROS</ThWithTooltip>
                 <ThWithTooltip tip="Costo de inversión = Σ(cantidad × costo_unitario) de todos los productos vendidos hoy. Suma del costo que pagó el admin por cada unidad vendida.">COSTO</ThWithTooltip>
-                <ThWithTooltip tip="Costo calle. Fórmula: COSTO CLL. = COSTO. Mismo valor que COSTO.">COSTO CLL.</ThWithTooltip>
+                <ThWithTooltip tip="COSTO CLL. = Σ(cantidad × precio_venta) de todos los productos vendidos hoy. Valor de venta en calle.">COSTO CLL.</ThWithTooltip>
                 <ThWithTooltip tip="Recaudo en efectivo. Fórmula: SUM(abono WHERE payment_method='efectivo').">EFECTIVO</ThWithTooltip>
                 <ThWithTooltip tip="Recaudo por Nequi. Fórmula: SUM(abono WHERE payment_method='nequi').">NEQUI</ThWithTooltip>
                 <ThWithTooltip tip="Total recaudado. Fórmula: TOTAL = EFECTIVO + NEQUI + OTROS (otros métodos). Suma de todos los abonos del día.">TOTAL</ThWithTooltip>
