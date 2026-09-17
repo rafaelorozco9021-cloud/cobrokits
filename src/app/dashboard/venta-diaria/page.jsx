@@ -51,11 +51,28 @@ export default function Page() {
 
   const perSeller = useMemo(() => {
     const dayVisits = (data.visits || []).filter((v) => bogotaDayKey(v.visit_date || v.created_at) === isoDate);
-    // Saldo del día por vendedor: solo deuda generada ese día (sin arrastre)
-    const debtBySeller = new Map();
-    for (const v of dayVisits) {
+    // Calcular SALDO ANT. = ENTREGA semana pasada por vendedor
+    // Semana actual: lunes a domingo que contiene selectedDate
+    const sel = new Date(selectedDate);
+    const day = sel.getDay();
+    const diff = sel.getDate() - day + (day === 0 ? -6 : 1);
+    const weekStart = new Date(sel);
+    weekStart.setDate(diff);
+    weekStart.setHours(0, 0, 0, 0);
+    const prevStart = new Date(weekStart);
+    prevStart.setDate(weekStart.getDate() - 7);
+    const prevEnd = new Date(weekStart);
+    prevEnd.setDate(weekStart.getDate() - 1);
+    const prevStartKey = bogotaDayKey(prevStart);
+    const prevEndKey = bogotaDayKey(prevEnd);
+    const prevVisits = (data.visits || []).filter((v) => {
+      const k = bogotaDayKey(v.visit_date || v.created_at);
+      return k >= prevStartKey && k <= prevEndKey;
+    });
+    const entregaPrevBySeller = new Map();
+    for (const v of prevVisits) {
       const sid = v.seller_id;
-      debtBySeller.set(sid, (debtBySeller.get(sid) || 0) + Number(v.deuda || 0));
+      entregaPrevBySeller.set(sid, (entregaPrevBySeller.get(sid) || 0) + Number(v.venta || 0));
     }
     // Agrupar por seller_id
     const map = new Map();
@@ -68,11 +85,13 @@ export default function Page() {
     // También agregar sellers sin visitas con 0 para completar lista si es necesario
     const result = [];
     for (const [sid, group] of map.entries()) {
-      const cobros = group.visits.length;
+      const venta = group.visits.reduce((a, v) => a + Number(v.venta || 0), 0);
+      const ventasNuevasHoy = venta; // Σ(line_sale_total) del vendedor hoy
+      const saldoAnt = entregaPrevBySeller.get(sid) || 0; // ENTREGA semana pasada
+      const cobros = ventasNuevasHoy + saldoAnt; // Ventas nuevas + SALDO ANT.
       const efectivo = group.visits.filter((v) => String(v.payment_method || '').toLowerCase() === 'efectivo').reduce((a, v) => a + Number(v.abono || 0), 0);
       const nequi = group.visits.filter((v) => String(v.payment_method || '').toLowerCase() === 'nequi').reduce((a, v) => a + Number(v.abono || 0), 0);
       const total = efectivo + nequi + group.visits.filter((v) => !['efectivo', 'nequi'].includes(String(v.payment_method || '').toLowerCase())).reduce((a, v) => a + Number(v.abono || 0), 0);
-      const venta = group.visits.reduce((a, v) => a + Number(v.venta || 0), 0);
       const costo = Math.round(venta * 0.75);
       const entrega = venta;
       const gasto = 0;
@@ -81,7 +100,7 @@ export default function Page() {
       result.push({
         vendedor: group.vendedor,
         seller_id: sid,
-        saldoAnt: debtBySeller.get(sid) || 0,
+        saldoAnt,
         cobros,
         costo,
         costoCll: costo,
@@ -137,8 +156,8 @@ export default function Page() {
             <thead>
               <tr className="bg-[#2563eb] text-white">
                 <ThWithTooltip tip="Vendedor / cobrador. Cada fila agrupa todas las visitas de ese vendedor en el día seleccionado." className="text-left">VENDEDOR</ThWithTooltip>
-                <ThWithTooltip tip="SALDO ANT. = Suma de deuda generada por ese vendedor ese día. Fórmula: SUM(deuda de sus visitas).">SALDO ANT.</ThWithTooltip>
-                <ThWithTooltip tip="Número de cobros / visitas de ese vendedor. Fórmula: COUNT(visitas del vendedor ese día).">COBROS</ThWithTooltip>
+                <ThWithTooltip tip="SALDO ANT. = ENTREGA semana pasada por vendedor. Fórmula: SALDO ANT. = Σ(line_sale_total) de la semana anterior.">SALDO ANT.</ThWithTooltip>
+                <ThWithTooltip tip="COBROS = Ventas nuevas hoy + SALDO ANT. Fórmula: COBROS = Σ(line_sale_total del vendedor hoy) + ENTREGA semana pasada.">COBROS</ThWithTooltip>
                 <ThWithTooltip tip="Costo de mercancía vendida por ese vendedor. Si hay detalle: SUM(cantidad × costo_unitario). Si no: VENTA × 0.75.">COSTO</ThWithTooltip>
                 <ThWithTooltip tip="Costo calle. Fórmula: COSTO CLL. = COSTO.">COSTO CLL.</ThWithTooltip>
                 <ThWithTooltip tip="Recaudo en efectivo de ese vendedor. Fórmula: SUM(abono WHERE payment_method='efectivo').">EFECTIVO</ThWithTooltip>
@@ -162,7 +181,7 @@ export default function Page() {
                   <tr key={r.seller_id} className="border-t border-slate-200 hover:bg-slate-50">
                     <td className="px-2 py-2 font-bold text-slate-900">{r.vendedor}</td>
                     <td className="px-1 py-2 text-center text-slate-600">{money(r.saldoAnt)}</td>
-                    <td className="px-1 py-2 text-center font-bold">{r.cobros}</td>
+                    <td className="px-1 py-2 text-center font-bold">{money(r.cobros)}</td>
                     <td className="px-1 py-2 text-center">{money(r.costo)}</td>
                     <td className="px-1 py-2 text-center">{money(r.costoCll)}</td>
                     <td className="px-1 py-2 text-center text-emerald-700 font-bold">{money(r.efectivo)}</td>

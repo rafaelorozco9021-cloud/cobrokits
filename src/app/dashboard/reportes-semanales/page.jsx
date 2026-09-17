@@ -128,6 +128,27 @@ export default function Page() {
     load();
   }, [weekStart, weekEnd, tick]);
 
+  // Calcular ENTREGA de la semana pasada (= SALDO ANT. de esta semana)
+  const entregaPrevWeek = useMemo(() => {
+    const prevStart = new Date(weekStart);
+    prevStart.setDate(weekStart.getDate() - 7);
+    const prevEnd = new Date(weekStart);
+    prevEnd.setDate(weekStart.getDate() - 1);
+    const prevStartKey = bogotaDayKey(prevStart);
+    const prevEndKey = bogotaDayKey(prevEnd);
+    const prevVisits = (data.visits || []).filter((v) => {
+      const k = bogotaDayKey(v.visit_date || v.created_at);
+      return k >= prevStartKey && k <= prevEndKey;
+    });
+    if (prevVisits.length === 0) return 0;
+    if (data.items && data.items.length > 0) {
+      const prevIds = new Set(prevVisits.map((v) => v.id));
+      const prevItems = data.items.filter((it) => prevIds.has(it.visit_id));
+      if (prevItems.length > 0) return prevItems.reduce((a, it) => a + Number(it.quantity || 0) * Number(it.unit_price || 0), 0);
+    }
+    return prevVisits.reduce((a, v) => a + Number(v.venta || 0), 0);
+  }, [data.visits, data.items, weekStart]);
+
   // Calcular métricas por día - usar visits con venta/abono/payment_method
   const perDay = useMemo(() => {
     return days.map((d) => {
@@ -183,8 +204,13 @@ export default function Page() {
         costo = Math.round(venta * 0.75);
       }
 
-      const cobros = dayVisits.length;
-      const costoCll = costo; // por ahora igual a costo, podría ser costo de lo efectivamente cobrado
+      // Ventas nuevas dejadas a crédito HOY = Σ(line_sale_total) del día
+      const ventasNuevasHoy = venta;
+      // SALDO ANT. de esta semana = ENTREGA de la semana pasada (constante para toda la semana)
+      const saldoAnt = entregaPrevWeek;
+      // COBROS = Ventas nuevas HOY + SALDO ANT. (ENTREGA semana pasada)
+      const cobros = ventasNuevasHoy + saldoAnt;
+      const costoCll = costo;
       const entrega = venta;
       const gasto = 0;
       const caja = total - gasto;
@@ -195,14 +221,11 @@ export default function Page() {
       const dDinero = cuentas > 0 ? Math.round((cnl / cuentas) * 100) : 0;
       const pctEfect = total > 0 ? Math.round((efectivo / total) * 100) : 0;
 
-      // Saldo del día: solo la deuda generada ESE día (no se arrastra a los siguientes)
-      const deudaDia = dayVisits.reduce((a, v) => a + Number(v.deuda || 0), 0);
-
       return {
         date: d,
         iso,
         label: d.toLocaleDateString('es-CO', { weekday: 'long', day: '2-digit', month: '2-digit', year: '2-digit' }),
-        saldoAnt: deudaDia,
+        saldoAnt,
         cobros,
         costo,
         costoCll,
@@ -225,20 +248,21 @@ export default function Page() {
 
   const totals = useMemo(() => {
     const sum = (key) => perDay.reduce((a, r) => a + Number(r[key] || 0), 0);
+    const sumEntrega = sum('entrega');
     return {
-      saldoAnt: sum('saldoAnt'),
-      cobros: sum('cobros'),
+      saldoAnt: entregaPrevWeek,
+      cobros: sumEntrega + entregaPrevWeek,
       costo: sum('costo'),
       costoCll: sum('costoCll'),
       efectivo: sum('efectivo'),
       nequi: sum('nequi'),
       total: sum('total'),
-      entrega: sum('entrega'),
+      entrega: sumEntrega,
       gasto: sum('gasto'),
       caja: sum('caja'),
       ganancia: sum('ganancia'),
     };
-  }, [perDay]);
+  }, [perDay, entregaPrevWeek]);
 
   const nextWeek = () => {
     const n = new Date(weekStart);
@@ -276,8 +300,8 @@ export default function Page() {
             <thead>
               <tr className="bg-[#2563eb] text-white">
                 <ThWithTooltip tip="Fecha del día (lunes a domingo). Cada fila es un día de la semana seleccionada." className="text-left">FECHA</ThWithTooltip>
-                <ThWithTooltip tip="SALDO ANT. = Suma de deuda generada ese día. Fórmula: SUM(deuda de cada visita del día). No se arrastra al siguiente día.">SALDO ANT.</ThWithTooltip>
-                <ThWithTooltip tip="Número de cobros / visitas del día. Fórmula: COUNT(visitas del día).">COBROS</ThWithTooltip>
+                <ThWithTooltip tip="SALDO ANT. = ENTREGA de la semana pasada. Fórmula: SALDO ANT. = Σ(line_sale_total) de toda la semana anterior. Es el crédito arrastrado.">SALDO ANT.</ThWithTooltip>
+                <ThWithTooltip tip="COBROS = Ventas nuevas a crédito HOY + SALDO ANT. Fórmula: COBROS = Σ(line_sale_total del día) + ENTREGA semana pasada.">COBROS</ThWithTooltip>
                 <ThWithTooltip tip="Costo de mercancía vendida. Si hay detalle: SUM(cantidad × costo_unitario). Si no: VENTA × 0.75.">COSTO</ThWithTooltip>
                 <ThWithTooltip tip="Costo calle. Fórmula: COSTO CLL. = COSTO. Mismo valor que COSTO.">COSTO CLL.</ThWithTooltip>
                 <ThWithTooltip tip="Recaudo en efectivo. Fórmula: SUM(abono WHERE payment_method='efectivo').">EFECTIVO</ThWithTooltip>
@@ -297,7 +321,7 @@ export default function Page() {
                     <span className="text-[10px] font-normal text-slate-500">{r.date.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
                   </td>
                   <td className="px-1 py-2 text-center text-slate-600">{money(r.saldoAnt)}</td>
-                  <td className="px-1 py-2 text-center font-bold text-slate-900">{r.cobros || 0}</td>
+                  <td className="px-1 py-2 text-center font-bold text-slate-900">{money(r.cobros)}</td>
                   <td className="px-1 py-2 text-center text-slate-700">{money(r.costo)}</td>
                   <td className="px-1 py-2 text-center text-slate-700">{money(r.costoCll)}</td>
                   <td className="px-1 py-2 text-center text-emerald-700 font-bold">{money(r.efectivo)}</td>
@@ -312,7 +336,7 @@ export default function Page() {
               <tr className="bg-blue-50 font-black border-t-2 border-slate-300">
                 <td className="px-2 py-2 text-[#2563eb]">Total</td>
                 <td className="px-1 py-2 text-center text-[#2563eb]">{money(totals.saldoAnt)}</td>
-                <td className="px-1 py-2 text-center text-[#2563eb]">{totals.cobros}</td>
+                <td className="px-1 py-2 text-center text-[#2563eb]">{money(totals.cobros)}</td>
                 <td className="px-1 py-2 text-center text-[#2563eb]">{money(totals.costo)}</td>
                 <td className="px-1 py-2 text-center text-[#2563eb]">{money(totals.costoCll)}</td>
                 <td className="px-1 py-2 text-center text-[#2563eb]">{money(totals.efectivo)}</td>
