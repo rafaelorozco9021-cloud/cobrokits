@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { getToken } from '@/lib/auth';
 import { bogotaDayKey } from '@/lib/dates';
+import ThWithTooltip from '@/components/ThWithTooltip';
 
 function money(n) {
   const v = Number(n || 0);
@@ -135,18 +136,18 @@ export default function Page() {
           <table className="w-full text-[11px] border border-slate-200 min-w-[1100px]">
             <thead>
               <tr className="bg-[#2563eb] text-white">
-                <th className="px-2 py-2 text-left">VENDEDOR</th>
-                <th className="px-1 py-2">SALDO ANT.</th>
-                <th className="px-1 py-2">COBROS</th>
-                <th className="px-1 py-2">COSTO</th>
-                <th className="px-1 py-2">COSTO CLL.</th>
-                <th className="px-1 py-2">EFECTIVO</th>
-                <th className="px-1 py-2">NEQUI</th>
-                <th className="px-1 py-2">TOTAL</th>
-                <th className="px-1 py-2">ENTREGA</th>
-                <th className="px-1 py-2">GASTO</th>
-                <th className="px-1 py-2">$</th>
-                <th className="px-1 py-2">GANANCIA</th>
+                <ThWithTooltip tip="Vendedor / cobrador. Cada fila agrupa todas las visitas de ese vendedor en el día seleccionado." className="text-left">VENDEDOR</ThWithTooltip>
+                <ThWithTooltip tip="SALDO ANT. = Suma de deuda generada por ese vendedor ese día. Fórmula: SUM(deuda de sus visitas).">SALDO ANT.</ThWithTooltip>
+                <ThWithTooltip tip="Número de cobros / visitas de ese vendedor. Fórmula: COUNT(visitas del vendedor ese día).">COBROS</ThWithTooltip>
+                <ThWithTooltip tip="Costo de mercancía vendida por ese vendedor. Si hay detalle: SUM(cantidad × costo_unitario). Si no: VENTA × 0.75.">COSTO</ThWithTooltip>
+                <ThWithTooltip tip="Costo calle. Fórmula: COSTO CLL. = COSTO.">COSTO CLL.</ThWithTooltip>
+                <ThWithTooltip tip="Recaudo en efectivo de ese vendedor. Fórmula: SUM(abono WHERE payment_method='efectivo').">EFECTIVO</ThWithTooltip>
+                <ThWithTooltip tip="Recaudo por Nequi de ese vendedor. Fórmula: SUM(abono WHERE payment_method='nequi').">NEQUI</ThWithTooltip>
+                <ThWithTooltip tip="Total recaudado por ese vendedor. Fórmula: TOTAL = EFECTIVO + NEQUI + OTROS.">TOTAL</ThWithTooltip>
+                <ThWithTooltip tip="Valor de mercancía entregada / vendida por ese vendedor. Fórmula: ENTREGA = VENTA = SUM(cantidad × precio_venta).">ENTREGA</ThWithTooltip>
+                <ThWithTooltip tip="Gastos del día del vendedor (editable). Fórmula: valor manual. Afecta a $">GASTO</ThWithTooltip>
+                <ThWithTooltip tip="Caja de ese vendedor. Fórmula: $ = TOTAL - GASTO."> $</ThWithTooltip>
+                <ThWithTooltip tip="Ganancia de ese vendedor. Fórmula: GANANCIA = TOTAL - COSTO.">GANANCIA</ThWithTooltip>
               </tr>
             </thead>
             <tbody>

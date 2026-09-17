@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { buildAuthHeaders } from '@/lib/auth';
+import { ThWithTooltipLight } from '@/components/ThWithTooltip';
 
 function money(n) {
   const v = Number(n || 0);
@@ -221,13 +222,13 @@ export default function Page() {
             <table className="w-full min-w-[720px] border-collapse">
               <thead>
                 <tr className="bg-[#eff6ff] text-[#2563eb] text-[11px] font-extrabold">
-                  <th className="text-left px-3 py-2.5 font-extrabold tracking-wide">PRODUCTO</th>
-                  <th className="text-center px-2 py-2.5 font-extrabold tracking-wide w-[70px]">STOCK</th>
-                  <th className="text-right px-2 py-2.5 font-extrabold tracking-wide w-[90px]">COSTO</th>
-                  <th className="text-right px-2 py-2.5 font-extrabold tracking-wide w-[90px]">PVP</th>
-                  <th className="text-right px-2 py-2.5 font-extrabold tracking-wide w-[110px]">INVERSIÓN</th>
-                  <th className="text-right px-2 py-2.5 font-extrabold tracking-wide w-[110px]">ESTIMADO</th>
-                  <th className="text-center px-2 py-2.5 font-extrabold tracking-wide w-[70px]">AGREGAR</th>
+                  <ThWithTooltipLight tip="Nombre, categoría y SKU del producto." className="text-left">PRODUCTO</ThWithTooltipLight>
+                  <ThWithTooltipLight tip="Stock total en bodega. Fórmula: SUM(total_quantity en warehouse). Rojo ≤5, ámbar ≤10." className="text-center w-[70px]">STOCK</ThWithTooltipLight>
+                  <ThWithTooltipLight tip="Costo unitario. Campo: cost_price del producto." className="text-right w-[90px]">COSTO</ThWithTooltipLight>
+                  <ThWithTooltipLight tip="Precio de venta al público. Campo: price del producto." className="text-right w-[90px]">PVP</ThWithTooltipLight>
+                  <ThWithTooltipLight tip="Inversión total. Fórmula: INVERSIÓN = STOCK × COSTO.">INVERSIÓN</ThWithTooltipLight>
+                  <ThWithTooltipLight tip="Valor estimado de venta. Fórmula: ESTIMADO = STOCK × PVP.">ESTIMADO</ThWithTooltipLight>
+                  <ThWithTooltipLight tip="Agregar stock a este producto (suma a bodega)." className="text-center w-[70px]">AGREGAR</ThWithTooltipLight>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">

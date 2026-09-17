@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { getToken } from '@/lib/auth';
+import { ThWithTooltipLight } from '@/components/ThWithTooltip';
 
 export default function Page() {
   const [cobros, setCobros] = useState([]);
@@ -195,7 +196,7 @@ export default function Page() {
           )}
 
           <div className="grid grid-cols-[1fr_60px_80px_80px_70px] gap-1 text-[11px] font-bold text-[#2563eb] bg-blue-50 px-2 py-1.5 rounded mb-1">
-            <span>PRODUCTO</span><span className="text-center">STOCK</span><span className="text-center">COSTO</span><span className="text-center">PVP</span><span className="text-center">CANT.</span>
+            <span title="Nombre del producto">PRODUCTO</span><span className="text-center" title="Stock disponible en bodega. Fórmula: total_quantity en inventario general">STOCK</span><span className="text-center" title="Costo unitario. Campo: cost_price">COSTO</span><span className="text-center" title="Precio de venta. Campo: price">PVP</span><span className="text-center" title="Cantidad a asignar al vendedor (no puede exceder STOCK). Al asignar se descuenta de bodega">CANT.</span>
           </div>
 
           <div className="max-h-[480px] overflow-auto border border-slate-200 rounded-lg divide-y divide-slate-100">
@@ -269,7 +270,7 @@ export default function Page() {
                 <>
                   <div className="border border-slate-200 rounded-lg overflow-hidden">
                     <div className="grid grid-cols-[1fr_52px_52px_52px] gap-1 text-[11px] font-bold text-[#2563eb] bg-blue-50 px-2 py-1.5">
-                      <span>PRODUCTO</span><span className="text-center">ASIG.</span><span className="text-center">VEND.</span><span className="text-center">RESTO</span>
+                      <span title="Producto entregado">PRODUCTO</span><span className="text-center" title="Cantidad asignada al vendedor hoy. Fórmula: SUM(cantidad asignada)">ASIG.</span><span className="text-center" title="Cantidad vendida hoy. Fórmula: SUM(cantidad vendida por visitas)">VEND.</span><span className="text-center" title="Stock restante. Fórmula: RESTO = ASIG. - VEND.">RESTO</span>
                     </div>
                     <div className="divide-y divide-slate-100 max-h-[320px] overflow-auto">
                       {delivered.map((d) => {
