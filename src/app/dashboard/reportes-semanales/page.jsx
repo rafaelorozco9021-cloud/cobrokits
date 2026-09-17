@@ -181,27 +181,23 @@ export default function Page() {
       let venta = 0;
       let costo = 0;
       let unidades = 0;
+      // Ventas y Costo de inversión = Σ de todos los productos vendidos hoy
       if (data.items && data.items.length > 0) {
-        // items tienen visit_id, quantity, unit_price
         const visitIds = new Set(dayVisits.map((v) => v.id));
         const dayItems = data.items.filter((it) => visitIds.has(it.visit_id));
         venta = dayItems.reduce((a, it) => a + Number(it.quantity || 0) * Number(it.unit_price || 0), 0);
         unidades = dayItems.reduce((a, it) => a + Number(it.quantity || 0), 0);
-        // Costo: buscar producto cost_price
         const prodMap = new Map((data.products || []).map((p) => [p.id, Number(p.cost_price || p.cost || 0)]));
+        // Costo de inversión = Σ(cantidad × costo_unitario) de todos los productos vendidos hoy
         costo = dayItems.reduce((a, it) => a + Number(it.quantity || 0) * Number(prodMap.get(it.product_id) || 0), 0);
-        // Si no hay prodMap cost, usar 75% de precio como aproximación
-        if (costo === 0 && venta > 0) costo = Math.round(venta * 0.75);
       } else {
-        // Fallback: usar venta que viene en visits (si el backend ya la calcula)
         venta = dayVisits.reduce((a, v) => a + Number(v.venta || 0), 0);
-        // Si visits no trae venta, intentar sumar desde payments abono como proxy de venta si no hay items
         if (venta === 0 && dayPayments.length > 0) {
-          // No hay detalle, usar total como venta aproximada
           venta = total;
         }
-        unidades = dayVisits.length; // aproximación
-        costo = Math.round(venta * 0.75);
+        unidades = dayVisits.length;
+        // Sin detalle de items no se puede calcular costo real, se deja en 0
+        costo = 0;
       }
 
       // Ventas nuevas dejadas a crédito HOY = Σ(line_sale_total) del día
@@ -303,7 +299,7 @@ export default function Page() {
                 <ThWithTooltip tip="Fecha del día (lunes a domingo). Cada fila es un día de la semana seleccionada." className="text-left">FECHA</ThWithTooltip>
                 <ThWithTooltip tip="SALDO ANT. = ENTREGA de la semana pasada. Fórmula: SALDO ANT. = Σ(line_sale_total) de toda la semana anterior. Es el crédito arrastrado.">SALDO ANT.</ThWithTooltip>
                 <ThWithTooltip tip="COBROS = Ventas nuevas a crédito HOY + SALDO ANT. Fórmula: COBROS = Σ(line_sale_total del día) + ENTREGA semana pasada.">COBROS</ThWithTooltip>
-                <ThWithTooltip tip="Costo de mercancía vendida. Si hay detalle: SUM(cantidad × costo_unitario). Si no: VENTA × 0.75.">COSTO</ThWithTooltip>
+                <ThWithTooltip tip="Costo de inversión = Σ(cantidad × costo_unitario) de todos los productos vendidos hoy. Suma del costo que pagó el admin por cada unidad vendida.">COSTO</ThWithTooltip>
                 <ThWithTooltip tip="Costo calle. Fórmula: COSTO CLL. = COSTO. Mismo valor que COSTO.">COSTO CLL.</ThWithTooltip>
                 <ThWithTooltip tip="Recaudo en efectivo. Fórmula: SUM(abono WHERE payment_method='efectivo').">EFECTIVO</ThWithTooltip>
                 <ThWithTooltip tip="Recaudo por Nequi. Fórmula: SUM(abono WHERE payment_method='nequi').">NEQUI</ThWithTooltip>

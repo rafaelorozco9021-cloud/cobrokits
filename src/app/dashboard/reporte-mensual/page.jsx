@@ -132,6 +132,7 @@ export default function Page() {
       let venta = 0;
       let costo = 0;
       let unidades = 0;
+      // Costo de inversión = Σ(cantidad × costo_unitario) de todos los productos vendidos hoy
       if (data.items && data.items.length > 0) {
         const visitIds = new Set(dayVisits.map((v) => v.id));
         const dayItems = data.items.filter((it) => visitIds.has(it.visit_id));
@@ -139,14 +140,13 @@ export default function Page() {
         unidades = dayItems.reduce((a, it) => a + Number(it.quantity || 0), 0);
         const prodMap = new Map((data.products || []).map((p) => [p.id, Number(p.cost_price || p.cost || 0)]));
         costo = dayItems.reduce((a, it) => a + Number(it.quantity || 0) * Number(prodMap.get(it.product_id) || 0), 0);
-        if (costo === 0 && venta > 0) costo = Math.round(venta * 0.75);
       } else {
         venta = dayVisits.reduce((a, v) => a + Number(v.venta || 0), 0);
         if (venta === 0 && dayPayments.length > 0) {
           venta = total;
         }
         unidades = dayVisits.length;
-        costo = Math.round(venta * 0.75);
+        costo = 0;
       }
 
       const ventasNuevasHoy = venta;
@@ -244,7 +244,7 @@ export default function Page() {
                 <ThWithTooltip tip="Fecha del día del mes. Cada fila es un día del mes seleccionado." className="text-left">FECHA</ThWithTooltip>
                 <ThWithTooltip tip="SALDO ANT. = ENTREGA del mes pasado. Fórmula: SALDO ANT. = Σ(line_sale_total) del mes anterior.">SALDO ANT.</ThWithTooltip>
                 <ThWithTooltip tip="COBROS = Ventas nuevas hoy + SALDO ANT. Fórmula: COBROS = Σ(line_sale_total del día) + ENTREGA mes pasado.">COBROS</ThWithTooltip>
-                <ThWithTooltip tip="Costo de mercancía vendida. Si hay detalle: SUM(cantidad × costo_unitario). Si no: VENTA × 0.75.">COSTO</ThWithTooltip>
+                <ThWithTooltip tip="Costo de inversión = Σ(cantidad × costo_unitario) de todos los productos vendidos hoy. Suma del costo que pagó el admin por cada unidad vendida.">COSTO</ThWithTooltip>
                 <ThWithTooltip tip="Costo calle. Fórmula: COSTO CLL. = COSTO.">COSTO CLL.</ThWithTooltip>
                 <ThWithTooltip tip="Recaudo en efectivo. Fórmula: SUM(abono WHERE payment_method='efectivo').">EFECTIVO</ThWithTooltip>
                 <ThWithTooltip tip="Recaudo por Nequi. Fórmula: SUM(abono WHERE payment_method='nequi').">NEQUI</ThWithTooltip>

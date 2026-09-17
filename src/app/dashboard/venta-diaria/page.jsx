@@ -13,7 +13,7 @@ function money(n) {
 
 export default function Page() {
   const [selectedDate, setSelectedDate] = useState(() => new Date());
-  const [data, setData] = useState({ visits: [], products: [] });
+  const [data, setData] = useState({ visits: [], products: [], items: [] });
   const [loading, setLoading] = useState(true);
   // Tick de actualización en tiempo real: polling + foco/visibilidad
   const [tick, setTick] = useState(0);
@@ -42,7 +42,12 @@ export default function Page() {
         ]);
         const visits = Array.isArray(visitsRes) ? visitsRes : [];
         const products = Array.isArray(productsRes) ? productsRes : [];
-        setData({ visits, products });
+        let items = [];
+        try {
+          const itemsRes = await fetch('/api/customer-visit-items', { credentials: 'include', headers }).then((r) => r.json().catch(() => null));
+          if (Array.isArray(itemsRes)) items = itemsRes;
+        } catch {}
+        setData({ visits, products, items });
       } catch {}
       setLoading(false);
     }
@@ -93,7 +98,16 @@ export default function Page() {
       const efectivo = group.visits.filter((v) => String(v.payment_method || '').toLowerCase() === 'efectivo').reduce((a, v) => a + Number(v.abono || 0), 0);
       const nequi = group.visits.filter((v) => String(v.payment_method || '').toLowerCase() === 'nequi').reduce((a, v) => a + Number(v.abono || 0), 0);
       const total = efectivo + nequi + group.visits.filter((v) => !['efectivo', 'nequi'].includes(String(v.payment_method || '').toLowerCase())).reduce((a, v) => a + Number(v.abono || 0), 0);
-      const costo = Math.round(venta * 0.75);
+      // Costo de inversión = Σ(cantidad × costo_unitario) de todos los productos vendidos hoy por ese vendedor
+      let costo = 0;
+      if (data.items && data.items.length > 0) {
+        const visitIds = new Set(group.visits.map((v) => v.id));
+        const sellerItems = data.items.filter((it) => visitIds.has(it.visit_id));
+        if (sellerItems.length > 0) {
+          const prodMap = new Map((data.products || []).map((p) => [p.id, Number(p.cost_price || p.cost || 0)]));
+          costo = sellerItems.reduce((a, it) => a + Number(it.quantity || 0) * Number(prodMap.get(it.product_id) || 0), 0);
+        }
+      }
       const entrega = venta;
       const gasto = 0;
       const caja = total - gasto;
@@ -159,7 +173,7 @@ export default function Page() {
                 <ThWithTooltip tip="Vendedor / cobrador. Cada fila agrupa todas las visitas de ese vendedor en el día seleccionado." className="text-left">VENDEDOR</ThWithTooltip>
                 <ThWithTooltip tip="SALDO ANT. = ENTREGA semana pasada por vendedor. Fórmula: SALDO ANT. = Σ(line_sale_total) de la semana anterior.">SALDO ANT.</ThWithTooltip>
                 <ThWithTooltip tip="COBROS = Ventas nuevas hoy + SALDO ANT. Fórmula: COBROS = Σ(line_sale_total del vendedor hoy) + ENTREGA semana pasada.">COBROS</ThWithTooltip>
-                <ThWithTooltip tip="Costo de mercancía vendida por ese vendedor. Si hay detalle: SUM(cantidad × costo_unitario). Si no: VENTA × 0.75.">COSTO</ThWithTooltip>
+                <ThWithTooltip tip="Costo de inversión = Σ(cantidad × costo_unitario) de todos los productos vendidos hoy por ese vendedor. Suma del costo que pagó el admin.">COSTO</ThWithTooltip>
                 <ThWithTooltip tip="Costo calle. Fórmula: COSTO CLL. = COSTO.">COSTO CLL.</ThWithTooltip>
                 <ThWithTooltip tip="Recaudo en efectivo de ese vendedor. Fórmula: SUM(abono WHERE payment_method='efectivo').">EFECTIVO</ThWithTooltip>
                 <ThWithTooltip tip="Recaudo por Nequi de ese vendedor. Fórmula: SUM(abono WHERE payment_method='nequi').">NEQUI</ThWithTooltip>
