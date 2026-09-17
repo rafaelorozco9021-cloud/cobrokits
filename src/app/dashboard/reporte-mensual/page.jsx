@@ -150,8 +150,9 @@ export default function Page() {
       }
 
       const ventasNuevasHoy = venta;
-      const saldoAnt = entregaPrevMonth;
-      const cobros = ventasNuevasHoy + saldoAnt;
+      const tieneVenta = ventasNuevasHoy > 0;
+      const saldoAnt = tieneVenta ? entregaPrevMonth : 0;
+      const cobros = tieneVenta ? ventasNuevasHoy + entregaPrevMonth : 0;
       const costoCll = costo;
       const entrega = venta;
       const gasto = 0;

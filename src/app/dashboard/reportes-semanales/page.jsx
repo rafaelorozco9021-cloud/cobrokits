@@ -206,10 +206,11 @@ export default function Page() {
 
       // Ventas nuevas dejadas a crédito HOY = Σ(line_sale_total) del día
       const ventasNuevasHoy = venta;
-      // SALDO ANT. de esta semana = ENTREGA de la semana pasada (constante para toda la semana)
-      const saldoAnt = entregaPrevWeek;
-      // COBROS = Ventas nuevas HOY + SALDO ANT. (ENTREGA semana pasada)
-      const cobros = ventasNuevasHoy + saldoAnt;
+      // SALDO ANT. solo se muestra el día que hay venta, sino 0 (evita repetir en todos los días)
+      const tieneVenta = ventasNuevasHoy > 0;
+      const saldoAnt = tieneVenta ? entregaPrevWeek : 0;
+      // COBROS = Ventas nuevas HOY + SALDO ANT. Solo si hay venta, sino 0
+      const cobros = tieneVenta ? ventasNuevasHoy + entregaPrevWeek : 0;
       const costoCll = costo;
       const entrega = venta;
       const gasto = 0;

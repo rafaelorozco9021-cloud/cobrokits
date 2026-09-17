@@ -87,8 +87,9 @@ export default function Page() {
     for (const [sid, group] of map.entries()) {
       const venta = group.visits.reduce((a, v) => a + Number(v.venta || 0), 0);
       const ventasNuevasHoy = venta; // Σ(line_sale_total) del vendedor hoy
-      const saldoAnt = entregaPrevBySeller.get(sid) || 0; // ENTREGA semana pasada
-      const cobros = ventasNuevasHoy + saldoAnt; // Ventas nuevas + SALDO ANT.
+      const tieneVenta = ventasNuevasHoy > 0;
+      const saldoAnt = tieneVenta ? (entregaPrevBySeller.get(sid) || 0) : 0; // ENTREGA semana pasada solo si hay venta hoy
+      const cobros = tieneVenta ? ventasNuevasHoy + (entregaPrevBySeller.get(sid) || 0) : 0; // Ventas nuevas + SALDO ANT.
       const efectivo = group.visits.filter((v) => String(v.payment_method || '').toLowerCase() === 'efectivo').reduce((a, v) => a + Number(v.abono || 0), 0);
       const nequi = group.visits.filter((v) => String(v.payment_method || '').toLowerCase() === 'nequi').reduce((a, v) => a + Number(v.abono || 0), 0);
       const total = efectivo + nequi + group.visits.filter((v) => !['efectivo', 'nequi'].includes(String(v.payment_method || '').toLowerCase())).reduce((a, v) => a + Number(v.abono || 0), 0);
