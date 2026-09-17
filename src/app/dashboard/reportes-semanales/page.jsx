@@ -182,22 +182,31 @@ export default function Page() {
       let costo = 0;
       let unidades = 0;
       // Ventas y Costo de inversión = Σ de todos los productos vendidos hoy
+      // Intenta usar costo directo del backend (v.costo) si existe, sino calcula via items
+      let costoFromVisits = dayVisits.reduce((a, v) => a + Number(v.costo || 0), 0);
       if (data.items && data.items.length > 0) {
         const visitIds = new Set(dayVisits.map((v) => v.id));
         const dayItems = data.items.filter((it) => visitIds.has(it.visit_id));
-        venta = dayItems.reduce((a, it) => a + Number(it.quantity || 0) * Number(it.unit_price || 0), 0);
-        unidades = dayItems.reduce((a, it) => a + Number(it.quantity || 0), 0);
-        const prodMap = new Map((data.products || []).map((p) => [p.id, Number(p.cost_price || p.cost || 0)]));
-        // Costo de inversión = Σ(cantidad × costo_unitario) de todos los productos vendidos hoy
-        costo = dayItems.reduce((a, it) => a + Number(it.quantity || 0) * Number(prodMap.get(it.product_id) || 0), 0);
+        // Si hay items, venta y costo via items es más preciso
+        const ventaFromItems = dayItems.reduce((a, it) => a + Number(it.quantity || 0) * Number(it.unit_price || 0), 0);
+        if (ventaFromItems > 0) venta = ventaFromItems;
+        else venta = dayVisits.reduce((a, v) => a + Number(v.venta || 0), 0);
+        unidades = dayItems.length > 0 ? dayItems.reduce((a, it) => a + Number(it.quantity || 0), 0) : dayVisits.length;
+        if (costoFromVisits === 0) {
+          const prodMap = new Map((data.products || []).map((p) => [p.id, Number(p.cost_price || p.cost || 0)]));
+          costo = dayItems.reduce((a, it) => a + Number(it.quantity || 0) * Number(prodMap.get(it.product_id) || 0), 0);
+        } else {
+          costo = costoFromVisits;
+        }
+        if (venta === 0 && dayPayments.length > 0) venta = total;
+        if (costo === 0 && costoFromVisits > 0) costo = costoFromVisits;
       } else {
         venta = dayVisits.reduce((a, v) => a + Number(v.venta || 0), 0);
         if (venta === 0 && dayPayments.length > 0) {
           venta = total;
         }
         unidades = dayVisits.length;
-        // Sin detalle de items no se puede calcular costo real, se deja en 0
-        costo = 0;
+        costo = costoFromVisits;
       }
 
       // Ventas nuevas dejadas a crédito HOY = Σ(line_sale_total) del día

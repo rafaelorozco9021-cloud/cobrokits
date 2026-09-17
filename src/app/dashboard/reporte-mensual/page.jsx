@@ -132,21 +132,28 @@ export default function Page() {
       let venta = 0;
       let costo = 0;
       let unidades = 0;
-      // Costo de inversión = Σ(cantidad × costo_unitario) de todos los productos vendidos hoy
+      let costoFromVisits = dayVisits.reduce((a, v) => a + Number(v.costo || 0), 0);
       if (data.items && data.items.length > 0) {
         const visitIds = new Set(dayVisits.map((v) => v.id));
         const dayItems = data.items.filter((it) => visitIds.has(it.visit_id));
-        venta = dayItems.reduce((a, it) => a + Number(it.quantity || 0) * Number(it.unit_price || 0), 0);
-        unidades = dayItems.reduce((a, it) => a + Number(it.quantity || 0), 0);
-        const prodMap = new Map((data.products || []).map((p) => [p.id, Number(p.cost_price || p.cost || 0)]));
-        costo = dayItems.reduce((a, it) => a + Number(it.quantity || 0) * Number(prodMap.get(it.product_id) || 0), 0);
+        const ventaFromItems = dayItems.reduce((a, it) => a + Number(it.quantity || 0) * Number(it.unit_price || 0), 0);
+        if (ventaFromItems > 0) venta = ventaFromItems;
+        else venta = dayVisits.reduce((a, v) => a + Number(v.venta || 0), 0);
+        unidades = dayItems.length > 0 ? dayItems.reduce((a, it) => a + Number(it.quantity || 0), 0) : dayVisits.length;
+        if (costoFromVisits === 0) {
+          const prodMap = new Map((data.products || []).map((p) => [p.id, Number(p.cost_price || p.cost || 0)]));
+          costo = dayItems.reduce((a, it) => a + Number(it.quantity || 0) * Number(prodMap.get(it.product_id) || 0), 0);
+        } else {
+          costo = costoFromVisits;
+        }
+        if (venta === 0 && dayPayments.length > 0) venta = total;
       } else {
         venta = dayVisits.reduce((a, v) => a + Number(v.venta || 0), 0);
         if (venta === 0 && dayPayments.length > 0) {
           venta = total;
         }
         unidades = dayVisits.length;
-        costo = 0;
+        costo = costoFromVisits;
       }
 
       const ventasNuevasHoy = venta;

@@ -99,13 +99,14 @@ export default function Page() {
       const nequi = group.visits.filter((v) => String(v.payment_method || '').toLowerCase() === 'nequi').reduce((a, v) => a + Number(v.abono || 0), 0);
       const total = efectivo + nequi + group.visits.filter((v) => !['efectivo', 'nequi'].includes(String(v.payment_method || '').toLowerCase())).reduce((a, v) => a + Number(v.abono || 0), 0);
       // Costo de inversión = Σ(cantidad × costo_unitario) de todos los productos vendidos hoy por ese vendedor
-      let costo = 0;
-      if (data.items && data.items.length > 0) {
+      let costo = group.visits.reduce((a, v) => a + Number(v.costo || 0), 0);
+      if (costo === 0 && data.items && data.items.length > 0) {
         const visitIds = new Set(group.visits.map((v) => v.id));
         const sellerItems = data.items.filter((it) => visitIds.has(it.visit_id));
         if (sellerItems.length > 0) {
           const prodMap = new Map((data.products || []).map((p) => [p.id, Number(p.cost_price || p.cost || 0)]));
-          costo = sellerItems.reduce((a, it) => a + Number(it.quantity || 0) * Number(prodMap.get(it.product_id) || 0), 0);
+          const costoFromItems = sellerItems.reduce((a, it) => a + Number(it.quantity || 0) * Number(prodMap.get(it.product_id) || 0), 0);
+          if (costoFromItems > 0) costo = costoFromItems;
         }
       }
       const costoCll = venta; // Valor de venta = Σ(cantidad × precio_venta)
