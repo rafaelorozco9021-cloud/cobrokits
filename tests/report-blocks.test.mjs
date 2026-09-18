@@ -129,6 +129,38 @@ test('Regla 1: GASTO no afecta la deuda y el cobro no afecta la caja esperada', 
   assert.strictEqual(conGasto.ganancia, sinGasto.ganancia); // margen intacto
 });
 
+test('Semana sin movimiento: flujos en 0, la deuda se mantiene como saldo arrastrado', () => {
+  const days = [new Date(2026, 8, 14), new Date(2026, 8, 15), new Date(2026, 8, 16)];
+  const dayKeyOf = (d) => {
+    const x = d instanceof Date ? d : new Date(d);
+    return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+  };
+  const period = computePeriodRows({
+    days,
+    visits: [],
+    payments: [],
+    items: [],
+    products: [],
+    deudaInicialPeriodo: 348685,
+    deudaInicialOldPeriodo: 1072272,
+    dayKeyOf,
+  });
+  assert.strictEqual(period.huboMovimiento, false);
+  for (const r of period.rows) {
+    assert.strictEqual(r.saldoAnt, 0);
+    assert.strictEqual(r.cobros, 0);
+    assert.strictEqual(r.entrega, 0);
+    assert.strictEqual(r.total, 0);
+  }
+  // La deuda viva no desaparece: se mantiene intacta para el periodo siguiente.
+  assert.strictEqual(period.deudaFinalPeriodo, 348685);
+  const t = buildPeriodTotals(period.rows, period);
+  assert.strictEqual(t.total, 0);
+  assert.strictEqual(t.costoCll, 0);
+  assert.strictEqual(t.saldoAnt, 348685); // saldo, no flujo
+  assert.strictEqual(t.entrega, 348685); // saldo, no flujo
+});
+
 test('Auditoria: el sesgo acumulado equals cobrado historico ignorado por la formula vieja', () => {
   const dayKeyOf = (d) => {
     const x = d instanceof Date ? d : new Date(d);

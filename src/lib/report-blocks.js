@@ -340,6 +340,9 @@ export function computePeriodRows({
     };
   });
 
+  // Sin movimiento en todo el periodo, la deuda se mantiene intacta:
+  // deudaFinal == deudaInicial (saldo arrastrado, no flujo del periodo).
+  const huboMovimiento = ventaPeriodo > 0 || cobradoPeriodo > 0;
   return {
     rows,
     deudaInicialPeriodo: toNum(deudaInicialPeriodo),
@@ -349,15 +352,20 @@ export function computePeriodRows({
     ventaPeriodo,
     cobradoPeriodo,
     costoPeriodo,
+    huboMovimiento,
   };
 }
 
 /**
  * Totales del periodo para la fila "Total".
- * NOTA: ENTREGA (deuda final) NO se suma por día — sumar deudas diarias
- * duplicaría el saldo. El total correcto es la deuda final del último día
- * con movimiento. Igual para SALDO ANT. (deuda inicial del periodo) y
- * COBROS total (= deuda inicial + venta del periodo).
+ * La fila mezcla dos naturalezas distintas (ver títulos en la UI):
+ * - FLUJOS (se suman): COSTO, COSTO CLL, EFECTIVO, NEQUI, TOTAL, GASTO, $, GANANCIA.
+ * - SALDOS (no se suman, son la deuda viva): SALDO ANT. = deuda al iniciar el
+ *   periodo; ENTREGA = deuda al cierre; COBROS = deuda inicial + ventas del
+ *   periodo (base de cobro). La fila equivale a ver el periodo como un solo día:
+ *   COBROS = SALDO ANT. + COSTO CLL y ENTREGA = COBROS − TOTAL.
+ * Si el periodo no tuvo movimiento, los flujos son 0 pero los saldos muestran
+ * la deuda arrastrada (sigue debiéndose aunque la semana esté quieta).
  */
 export function buildPeriodTotals(rows = [], period = {}) {
   const sum = (key) => (rows || []).reduce((a, r) => a + toNum(r[key]), 0);

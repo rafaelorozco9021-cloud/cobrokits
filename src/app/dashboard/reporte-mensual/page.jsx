@@ -176,6 +176,12 @@ export default function Page() {
             )}
           </div>
         )}
+        {!loading && !period.huboMovimiento && (
+          <div className="rounded-lg border border-sky-300 bg-sky-50 px-3 py-2 text-[11px] text-slate-700">
+            <span className="font-bold text-slate-900">Mes sin movimiento:</span> no hubo ventas ni recaudos en {monthLabel}.
+            Los flujos del mes son 0; la deuda en calle se mantiene en <span className="font-black">{money(period.deudaFinalPeriodo)}</span> como saldo arrastrado (ver SALDO ANT. del Total — es la deuda viva, no actividad del mes).
+          </div>
+        )}
         <div className="overflow-auto">
           <table className="w-full text-[11px] border border-slate-200 min-w-[1200px]">
             <thead>
@@ -233,15 +239,15 @@ export default function Page() {
                 </tr>
               ))}
               <tr className="bg-blue-50 font-black border-t-2 border-slate-300">
-                <td className="px-2 py-2 text-[#2563eb]">Total</td>
-                <td className="px-1 py-2 text-center text-[#2563eb]">{money(totals.saldoAnt)}</td>
-                <td className="px-1 py-2 text-center text-[#2563eb]">{money(totals.cobros)}</td>
+                <td className="px-2 py-2 text-[#2563eb]" title="Flujos sumados del mes; SALDO ANT., COBROS y ENTREGA son saldos (deuda viva), no flujos.">Total</td>
+                <td className="px-1 py-2 text-center text-[#2563eb]" title="SALDO (no flujo): deuda al iniciar el mes, arrastrada de meses anteriores.">{money(totals.saldoAnt)}</td>
+                <td className="px-1 py-2 text-center text-[#2563eb]" title="SALDO (no flujo): base de cobro = deuda inicial + ventas del mes.">{money(totals.cobros)}</td>
                 <td className="px-1 py-2 text-center text-[#2563eb]">{money(totals.costo)}</td>
                 <td className="px-1 py-2 text-center text-[#2563eb]">{money(totals.costoCll)}</td>
                 <td className="px-1 py-2 text-center text-[#2563eb]">{money(totals.efectivo)}</td>
                 <td className="px-1 py-2 text-center text-[#2563eb]">{money(totals.nequi)}</td>
                 <td className="px-1 py-2 text-center text-[#2563eb]">{money(totals.total)}</td>
-                <td className="px-1 py-2 text-center text-[#2563eb]">{money(totals.entrega)}</td>
+                <td className="px-1 py-2 text-center text-[#2563eb]" title="SALDO (no flujo): deuda en calle al cierre. No se suma por día.">{money(totals.entrega)}</td>
                 <td className="px-1 py-2 text-center text-[#2563eb]">{money(totals.gasto)}</td>
                 <td className="px-1 py-2 text-center text-[#2563eb]">{money(totals.caja)}</td>
                 <td className="px-1 py-2 text-center text-emerald-700">{money(totals.ganancia)}</td>
