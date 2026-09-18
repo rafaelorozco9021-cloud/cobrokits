@@ -250,8 +250,8 @@ export default function Page() {
         )}
         {!loading && !period.huboMovimiento && (
           <div className="rounded-lg border border-sky-300 bg-sky-50 px-3 py-2 text-[11px] text-slate-700">
-            <span className="font-bold text-slate-900">Semana sin movimiento:</span> no hubo ventas ni recaudos del {weekStart.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit' })} al {weekEnd.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' })}.
-            Los flujos de la semana son 0; la deuda en calle se mantiene en <span className="font-black">{money(period.deudaFinalPeriodo)}</span> como saldo arrastrado (ver SALDO ANT. del Total — es la deuda viva, no actividad de la semana).
+            <span className="font-bold text-slate-900">Semana sin movimiento:</span> no se dejó nada a crédito ni hubo recaudos del {weekStart.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit' })} al {weekEnd.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' })}, por eso los totales van en 0.
+            El saldo anterior se conserva y reaparecerá como SALDO ANT. en la próxima semana con movimiento.
           </div>
         )}
         <div className="overflow-auto">

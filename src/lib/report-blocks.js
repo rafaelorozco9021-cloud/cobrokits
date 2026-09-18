@@ -364,11 +364,23 @@ export function computePeriodRows({
  *   periodo; ENTREGA = deuda al cierre; COBROS = deuda inicial + ventas del
  *   periodo (base de cobro). La fila equivale a ver el periodo como un solo día:
  *   COBROS = SALDO ANT. + COSTO CLL y ENTREGA = COBROS − TOTAL.
- * Si el periodo no tuvo movimiento, los flujos son 0 pero los saldos muestran
- * la deuda arrastrada (sigue debiéndose aunque la semana esté quieta).
+ * Si el periodo no tuvo movimiento (ni ventas ni recaudos), la fila Total va
+ * toda en 0: la semana no dejó nada a crédito y mostrar saldos parecería
+ * actividad. La deuda arrastrada NO se pierde: sigue viva en
+ * periodo.deudaFinalPeriodo y reaparece como SALDO ANT. en el próximo periodo
+ * con movimiento (Regla 2).
  */
 export function buildPeriodTotals(rows = [], period = {}) {
   const sum = (key) => (rows || []).reduce((a, r) => a + toNum(r[key]), 0);
+  // Periodo quieto: Total en 0 (no se dejó nada a crédito esta semana).
+  // El arrastre interno (period.deudaFinalPeriodo) se conserva aparte para
+  // propagarlo como SALDO ANT. cuando haya movimiento de nuevo.
+  if (period && period.huboMovimiento === false) {
+    return {
+      saldoAnt: 0, cobros: 0, costo: 0, costoCll: 0, efectivo: 0, nequi: 0,
+      total: 0, entrega: 0, gasto: 0, caja: 0, ganancia: 0, margen: 0,
+    };
+  }
   return {
     saldoAnt: toNum(period.deudaInicialPeriodo),
     // COBROS total del periodo = deuda inicial + ventas del periodo

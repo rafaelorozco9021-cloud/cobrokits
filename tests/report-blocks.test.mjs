@@ -129,7 +129,7 @@ test('Regla 1: GASTO no afecta la deuda y el cobro no afecta la caja esperada', 
   assert.strictEqual(conGasto.ganancia, sinGasto.ganancia); // margen intacto
 });
 
-test('Semana sin movimiento: flujos en 0, la deuda se mantiene como saldo arrastrado', () => {
+test('Semana sin movimiento: Total en 0 pero el arrastre interno se conserva', () => {
   const days = [new Date(2026, 8, 14), new Date(2026, 8, 15), new Date(2026, 8, 16)];
   const dayKeyOf = (d) => {
     const x = d instanceof Date ? d : new Date(d);
@@ -152,13 +152,14 @@ test('Semana sin movimiento: flujos en 0, la deuda se mantiene como saldo arrast
     assert.strictEqual(r.entrega, 0);
     assert.strictEqual(r.total, 0);
   }
-  // La deuda viva no desaparece: se mantiene intacta para el periodo siguiente.
+  // La deuda NO se pierde: el arrastre interno sigue intacto para propagarlo
+  // como SALDO ANT. en el próximo periodo con movimiento (Regla 2).
   assert.strictEqual(period.deudaFinalPeriodo, 348685);
+  // Pero la fila Total va toda en 0: la semana no dejó nada a crédito.
   const t = buildPeriodTotals(period.rows, period);
-  assert.strictEqual(t.total, 0);
-  assert.strictEqual(t.costoCll, 0);
-  assert.strictEqual(t.saldoAnt, 348685); // saldo, no flujo
-  assert.strictEqual(t.entrega, 348685); // saldo, no flujo
+  for (const k of ['saldoAnt', 'cobros', 'costo', 'costoCll', 'efectivo', 'nequi', 'total', 'entrega', 'gasto', 'caja', 'ganancia']) {
+    assert.strictEqual(t[k], 0, `total.${k} debe ser 0 en semana quieta`);
+  }
 });
 
 test('Auditoria: el sesgo acumulado equals cobrado historico ignorado por la formula vieja', () => {
