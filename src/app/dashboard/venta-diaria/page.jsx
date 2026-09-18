@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { getToken } from '@/lib/auth';
 import { bogotaDayKey } from '@/lib/dates';
 import ThWithTooltip from '@/components/ThWithTooltip';
-import { buildCreditRow, buildCashRow, buildMarginRow } from '@/lib/report-blocks';
+import { buildCreditRow, buildCashRow, buildMarginRow, sumDayCash, sumDaySale, sumHistoryDebt } from '@/lib/report-blocks';
 
 function money(n) {
   const v = Number(n || 0);
@@ -72,19 +72,6 @@ export default function Page() {
     weekStart.setDate(diff);
     weekStart.setHours(0, 0, 0, 0);
     const weekStartKey = bogotaDayKey(weekStart);
-    const deudaBySeller = new Map(); // sid -> { ventaHist, cobradoHist }
-    for (const v of data.visits || []) {
-      const k = bogotaDayKey(v.visit_date || v.created_at);
-      if (!k || k >= weekStartKey) continue;
-      const sid = v.seller_id;
-      if (!deudaBySeller.has(sid)) deudaBySeller.set(sid, { ventaHist: 0, cobradoHist: 0 });
-      const acc = deudaBySeller.get(sid);
-      acc.ventaHist += Number(v.venta || 0);
-      const method = String(v.payment_method || '').toLowerCase();
-      if (v.abono !== undefined && v.abono !== null && (method === 'efectivo' || method === 'nequi' || method === '' || v.payment_method === undefined)) {
-        acc.cobradoHist += Number(v.abono || 0);
-      }
-    }
     // Agrupar por seller_id
     const map = new Map();
     for (const v of dayVisits) {
@@ -92,37 +79,33 @@ export default function Page() {
       if (!map.has(sid)) map.set(sid, { seller_id: sid, vendedor: v.vendedor || v.seller_name || String(sid).slice(0, 6), visits: [] });
       map.get(sid).visits.push(v);
     }
+    const dayKeyOf = (x) => bogotaDayKey(x);
     const result = [];
     for (const [sid, group] of map.entries()) {
-      const venta = group.visits.reduce((a, v) => a + Number(v.venta || 0), 0);
-      const tieneMovimiento = venta > 0 || group.visits.some((v) => Number(v.abono || 0) > 0);
-      // BLOQUE 1 — deuda inicial = neto histórico del vendedor (0 si no hay movimiento hoy).
-      const acc = deudaBySeller.get(sid) || { ventaHist: 0, cobradoHist: 0 };
-      const deudaInicial = acc.ventaHist - acc.cobradoHist;
-      const saldoAnt = tieneMovimiento ? deudaInicial : 0;
-      // BLOQUE 2 — caja del vendedor (independiente de la deuda).
-      const efectivo = group.visits.filter((v) => String(v.payment_method || '').toLowerCase() === 'efectivo').reduce((a, v) => a + Number(v.abono || 0), 0);
-      const nequi = group.visits.filter((v) => String(v.payment_method || '').toLowerCase() === 'nequi').reduce((a, v) => a + Number(v.abono || 0), 0);
-      // Costo de inversión de lo entregado hoy por ese vendedor (Bloque 3, dato).
-      let costo = group.visits.reduce((a, v) => a + Number(v.costo || 0), 0);
-      if (costo === 0 && data.items && data.items.length > 0) {
-        const visitIds = new Set(group.visits.map((v) => v.id));
-        const sellerItems = data.items.filter((it) => visitIds.has(it.visit_id));
-        if (sellerItems.length > 0) {
-          const prodMap = new Map((data.products || []).map((p) => [p.id, Number(p.cost_price || p.cost || 0)]));
-          const costoFromItems = sellerItems.reduce((a, it) => a + Number(it.quantity || 0) * Number(prodMap.get(it.product_id) || 0), 0);
-          if (costoFromItems > 0) costo = costoFromItems;
-        }
-      }
+      // ENTRADAS OBSERVADAS del vendedor (misma fuente que semanal/mensual).
+      const sellerItems = (data.items || []).length > 0
+        ? (data.items || []).filter((it) => new Set(group.visits.map((v) => v.id)).has(it.visit_id))
+        : [];
+      const recaudo = sumDayCash(group.visits, []);
+      const cobradoHoy = recaudo.efectivo + recaudo.nequi; // = TOTAL observado
+      const sale = sumDaySale(group.visits, sellerItems, data.products);
+      const venta = sale.venta;
+      const costo = sale.costo;
       const costoCll = venta; // valor de venta de lo entregado hoy
-      // BLOQUE 1 — COBROS ya incluye SALDO ANT; ENTREGA = COBROS − TOTAL.
+      const tieneMovimiento = venta > 0 || cobradoHoy > 0;
+      // BLOQUE 1 — deuda inicial = neto histórico Σ(venta − cobrado) del
+      // vendedor antes del lunes (fórmula vieja: Σ(venta) bruta → inflaba).
+      // 0 si no hay movimiento hoy. ENTREGA = COBROS − TOTAL (corr.).
+      const deudaInicial = sumHistoryDebt(data.visits, { beforeKey: weekStartKey, dayKeyOf, sellerId: sid }).deuda;
+      const saldoAnt = tieneMovimiento ? deudaInicial : 0;
       const credit = tieneMovimiento
-        ? buildCreditRow({ deudaInicial: saldoAnt, entregadoCreditoHoy: costoCll, cobradoHoy: efectivo + nequi })
+        ? buildCreditRow({ deudaInicial: saldoAnt, entregadoCreditoHoy: costoCll, cobradoHoy })
         : { saldoAnt: 0, cobros: 0, costoCll: 0, entrega: 0 };
       // BLOQUE 2 — cierre con gasto opcional (default 0) + validación $.
+      // No lee valores de deuda.
       const cashRow = buildCashRow({
-        efectivo,
-        nequi,
+        efectivo: recaudo.efectivo,
+        nequi: recaudo.nequi,
         gasto: gastosBySeller[sid] ?? 0,
         entregadoOverride: entregadoBySeller[sid] ?? null,
       });
@@ -135,8 +118,8 @@ export default function Page() {
         cobros: credit.cobros,
         costo,
         costoCll,
-        efectivo,
-        nequi,
+        efectivo: recaudo.efectivo,
+        nequi: recaudo.nequi,
         total: cashRow.total,
         entrega: credit.entrega,
         gasto: cashRow.gasto,

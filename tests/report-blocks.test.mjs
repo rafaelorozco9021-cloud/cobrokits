@@ -6,6 +6,9 @@ import {
   buildMarginRow,
   computePeriodRows,
   buildPeriodTotals,
+  computeDeudaInicial,
+  sumDaySale,
+  sumHistoryDebt,
 } from '../src/lib/report-blocks.js';
 
 console.log('Running report-blocks.test.mjs...');
@@ -65,4 +68,78 @@ test('Arrastre semanal: la deuda final se propaga sin inflarse', () => {
   const t = buildPeriodTotals(rows, { deudaInicialPeriodo: 100, deudaFinalPeriodo, ventaPeriodo: 90 });
   assert.strictEqual(t.entrega, 160);
   assert.strictEqual(t.cobros, 190);
+});
+
+test('Regla 1: dia de solo-abonos NO inventa venta (COSTO CLL=0, la deuda baja)', () => {
+  // Sin visits de venta, solo un pago suelto de 70 en payments.
+  const days = [new Date(2026, 8, 16)];
+  const dayKeyOf = (d) => {
+    const x = d instanceof Date ? d : new Date(d);
+    return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+  };
+  const { rows } = computePeriodRows({
+    days,
+    visits: [],
+    payments: [{ created_at: new Date(2026, 8, 16, 12, 0), amount: 70, payment_method: 'efectivo' }],
+    items: [],
+    products: [],
+    deudaInicialPeriodo: 200,
+    deudaInicialOldPeriodo: 200,
+    dayKeyOf,
+  });
+  assert.strictEqual(rows[0].costoCll, 0);
+  assert.strictEqual(rows[0].cobros, 200); // solo arrastre, sin inflar
+  assert.strictEqual(rows[0].entrega, 130); // 200 - 70
+  assert.strictEqual(rows[0].ganancia, 0); // sin entregas no hay margen
+});
+
+test('Anti-duplicacion: visita con 2 abonos (2 filas backend) cuenta la venta una vez', () => {
+  const dayKeyOf = (d) => {
+    const x = d instanceof Date ? d : new Date(d);
+    return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+  };
+  const visits = [
+    { id: 'v1', visit_date: new Date(2026, 8, 17, 12, 0), venta: 100, costo: 60, abono: 30, payment_method: 'efectivo' },
+    { id: 'v1', visit_date: new Date(2026, 8, 17, 12, 0), venta: 100, costo: 60, abono: 20, payment_method: 'efectivo' },
+  ];
+  const sale = sumDaySale(visits, [], []);
+  assert.strictEqual(sale.venta, 100); // no 200
+  assert.strictEqual(sale.costo, 60); // no 120
+  const hist = sumHistoryDebt(visits, { beforeKey: '2026-09-18', dayKeyOf });
+  assert.strictEqual(hist.ventaHist, 100);
+  assert.strictEqual(hist.cobradoHist, 50); // cada fila es un pago distinto: 30+20
+  assert.strictEqual(hist.deuda, 50);
+});
+
+test('Regla 1: GASTO no afecta la deuda y el cobro no afecta la caja esperada', () => {
+  const days = [new Date(2026, 8, 18)];
+  const dayKeyOf = (d) => {
+    const x = d instanceof Date ? d : new Date(d);
+    return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+  };
+  const visits = [
+    { id: 'w', visit_date: new Date(2026, 8, 18, 12, 0), venta: 100, costo: 60, abono: 40, payment_method: 'efectivo' },
+  ];
+  const base = { days, visits, payments: [], items: [], products: [], deudaInicialPeriodo: 0, deudaInicialOldPeriodo: 0, dayKeyOf };
+  const sinGasto = computePeriodRows({ ...base, gastosByKey: {} }).rows[0];
+  const conGasto = computePeriodRows({ ...base, gastosByKey: { [sinGasto.iso]: 15 } }).rows[0];
+  assert.strictEqual(conGasto.entrega, sinGasto.entrega); // Bloque 2 no toca Bloque 1
+  assert.strictEqual(conGasto.cobros, sinGasto.cobros);
+  assert.strictEqual(conGasto.cajaEsperada, sinGasto.cajaEsperada - 15); // gasto solo mueve $
+  assert.strictEqual(conGasto.ganancia, sinGasto.ganancia); // margen intacto
+});
+
+test('Auditoria: el sesgo acumulado equals cobrado historico ignorado por la formula vieja', () => {
+  const dayKeyOf = (d) => {
+    const x = d instanceof Date ? d : new Date(d);
+    return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+  };
+  const visits = [
+    { id: 'h1', visit_date: new Date(2026, 8, 1, 12, 0), venta: 500, costo: 300, abono: 200, payment_method: 'efectivo' },
+    { id: 'h2', visit_date: new Date(2026, 8, 2, 12, 0), venta: 300, costo: 180, abono: 100, payment_method: 'nequi' },
+  ];
+  const r = computeDeudaInicial({ visits, periodStartKey: '2026-09-10', dayKeyOf });
+  assert.strictEqual(r.deudaInicialNew, 500); // (500+300)-(200+100)
+  assert.strictEqual(r.deudaInicialOld, 800); // formula vieja: ventas brutas
+  assert.strictEqual(r.sesgoAcumulado, 300); // cobrado ignorado
 });

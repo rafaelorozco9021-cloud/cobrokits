@@ -142,13 +142,10 @@ export default function Page() {
     const periodStartKey = bogotaDayKey(weekStart);
     return computeDeudaInicial({
       visits: data.visits,
-      payments: data.payments,
-      items: data.items,
-      products: data.products,
       periodStartKey,
       dayKeyOf: (v) => bogotaDayKey(v),
     });
-  }, [data.visits, data.payments, data.items, data.products, weekStart]);
+  }, [data.visits, weekStart]);
 
   // Filas del periodo con los 3 bloques independientes + arrastre de deuda.
   // Ver computePeriodRows / report-blocks.js para las fórmulas documentadas.

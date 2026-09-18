@@ -100,13 +100,10 @@ export default function Page() {
     const periodStartKey = bogotaDayKey(new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1));
     return computeDeudaInicial({
       visits: data.visits,
-      payments: data.payments,
-      items: data.items,
-      products: data.products,
       periodStartKey,
       dayKeyOf: (v) => bogotaDayKey(v),
     });
-  }, [data.visits, data.payments, data.items, data.products, currentMonth]);
+  }, [data.visits, currentMonth]);
 
   // Filas del mes con los 3 bloques independientes + arrastre de deuda.
   const period = useMemo(() => {
