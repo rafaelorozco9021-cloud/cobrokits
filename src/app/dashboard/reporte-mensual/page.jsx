@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { getToken } from '@/lib/auth';
 import { bogotaDayKey } from '@/lib/dates';
 import ThWithTooltip from '@/components/ThWithTooltip';
+import { computeDeudaInicial, computePeriodRows, buildPeriodTotals } from '@/lib/report-blocks';
 
 function money(n) {
   const v = Number(n || 0);
@@ -15,6 +16,11 @@ export default function Page() {
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
   const [data, setData] = useState({ visits: [], payments: [], items: [], products: [] });
   const [loading, setLoading] = useState(true);
+  // Bloque 2 (caja): GASTO opcional por día (default 0) y $ digitado por el
+  // vendedor (override opcional para validar cuadre: $ debe = TOTAL - GASTO).
+  const [gastosByKey, setGastosByKey] = useState({});
+  const [entregadoByKey, setEntregadoByKey] = useState({});
+  const [showAudit, setShowAudit] = useState(false);
   // Tick de actualización en tiempo real: polling + foco/visibilidad
   const [tick, setTick] = useState(0);
 
@@ -87,128 +93,41 @@ export default function Page() {
       load();
   }, [currentMonth, tick]);
 
-  // Calcular ENTREGA del mes pasado (= SALDO ANT. de este mes)
-  const entregaPrevMonth = useMemo(() => {
-    const prevMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1);
-    const prevMonthKeyPrefix = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}`;
-    const prevVisits = (data.visits || []).filter((v) => {
-      const k = bogotaDayKey(v.visit_date || v.created_at);
-      return k.startsWith(prevMonthKeyPrefix);
+  // Deuda inicial del periodo (SALDO ANT. del mes):
+  // CORREGIDA = Σ(venta − cobrado) histórico antes del día 1.
+  // La fórmula vieja usaba Σ(venta) bruta + bug ENTREGA = SALDO + COBROS − TOTAL.
+  const deudaInicial = useMemo(() => {
+    const periodStartKey = bogotaDayKey(new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1));
+    return computeDeudaInicial({
+      visits: data.visits,
+      payments: data.payments,
+      items: data.items,
+      products: data.products,
+      periodStartKey,
+      dayKeyOf: (v) => bogotaDayKey(v),
     });
-    if (prevVisits.length === 0) return 0;
-    if (data.items && data.items.length > 0) {
-      const prevIds = new Set(prevVisits.map((v) => v.id));
-      const prevItems = data.items.filter((it) => prevIds.has(it.visit_id));
-      if (prevItems.length > 0) return prevItems.reduce((a, it) => a + Number(it.quantity || 0) * Number(it.unit_price || 0), 0);
-    }
-    return prevVisits.reduce((a, v) => a + Number(v.venta || 0), 0);
-  }, [data.visits, data.items, currentMonth]);
+  }, [data.visits, data.payments, data.items, data.products, currentMonth]);
 
-  // Mismas métricas por día que el reporte semanal
-  const perDay = useMemo(() => {
-    return days.map((d) => {
-      const iso = bogotaDayKey(d);
-      const dayVisits = (data.visits || []).filter((v) => bogotaDayKey(v.visit_date || v.created_at) === iso);
-      const dayPayments = (data.payments || []).filter((p) => bogotaDayKey(p.created_at || p.visit_date) === iso);
-      const efectivoVisits = dayVisits.filter((v) => String(v.payment_method || '').toLowerCase() === 'efectivo').reduce((a, v) => a + Number(v.abono || 0), 0);
-      const nequiVisits = dayVisits.filter((v) => String(v.payment_method || '').toLowerCase() === 'nequi').reduce((a, v) => a + Number(v.abono || 0), 0);
-      let efectivo = efectivoVisits;
-      let nequi = nequiVisits;
-      let total = efectivo + nequi;
-      if (total === 0 && dayPayments.length > 0) {
-        const f = dayPayments.filter((p) => String(p.payment_method || '').toLowerCase() === 'efectivo').reduce((a, p) => a + Number(p.amount || 0), 0);
-        const n = dayPayments.filter((p) => String(p.payment_method || '').toLowerCase() === 'nequi').reduce((a, p) => a + Number(p.amount || 0), 0);
-        if (f + n > 0) {
-          efectivo = f;
-          nequi = n;
-          total = f + n;
-        }
-      }
-
-      let venta = 0;
-      let costo = 0;
-      let unidades = 0;
-      let costoFromVisits = dayVisits.reduce((a, v) => a + Number(v.costo || 0), 0);
-      if (data.items && data.items.length > 0) {
-        const visitIds = new Set(dayVisits.map((v) => v.id));
-        const dayItems = data.items.filter((it) => visitIds.has(it.visit_id));
-        const ventaFromItems = dayItems.reduce((a, it) => a + Number(it.quantity || 0) * Number(it.unit_price || 0), 0);
-        if (ventaFromItems > 0) venta = ventaFromItems;
-        else venta = dayVisits.reduce((a, v) => a + Number(v.venta || 0), 0);
-        unidades = dayItems.length > 0 ? dayItems.reduce((a, it) => a + Number(it.quantity || 0), 0) : dayVisits.length;
-        if (costoFromVisits === 0) {
-          const prodMap = new Map((data.products || []).map((p) => [p.id, Number(p.cost_price || p.cost || 0)]));
-          costo = dayItems.reduce((a, it) => a + Number(it.quantity || 0) * Number(prodMap.get(it.product_id) || 0), 0);
-        } else {
-          costo = costoFromVisits;
-        }
-        if (venta === 0 && dayPayments.length > 0) venta = total;
-      } else {
-        venta = dayVisits.reduce((a, v) => a + Number(v.venta || 0), 0);
-        if (venta === 0 && dayPayments.length > 0) {
-          venta = total;
-        }
-        unidades = dayVisits.length;
-        costo = costoFromVisits;
-      }
-
-      const ventasNuevasHoy = venta;
-      const tieneVenta = ventasNuevasHoy > 0;
-      const saldoAnt = tieneVenta ? entregaPrevMonth : 0;
-      const cobros = tieneVenta ? ventasNuevasHoy + entregaPrevMonth : 0;
-      // COSTO CLL = Σ(cantidad × precio_venta) de todos los productos vendidos hoy
-      const costoCll = venta;
-      const entrega = (saldoAnt + cobros) - total;
-      const gasto = 0;
-      const caja = total - gasto;
-      const ganancia = total - costo;
-      const cuentas = dayVisits.length;
-      const cnl = dayVisits.filter((v) => Number(v.deuda || 0) === 0).length;
-      const dMerca = venta > 0 ? Math.round((ganancia / venta) * 100) : 0;
-      const dDinero = cuentas > 0 ? Math.round((cnl / cuentas) * 100) : 0;
-      const pctEfect = total > 0 ? Math.round((efectivo / total) * 100) : 0;
-
-      return {
-        date: d,
-        iso,
-        saldoAnt,
-        cobros,
-        costo,
-        costoCll,
-        efectivo,
-        nequi,
-        total,
-        entrega,
-        gasto,
-        caja,
-        ganancia,
-        dMerca,
-        dDinero,
-        cuentas,
-        cnl,
-        unidades,
-        pctEfect,
-      };
+  // Filas del mes con los 3 bloques independientes + arrastre de deuda.
+  const period = useMemo(() => {
+    return computePeriodRows({
+      days,
+      visits: data.visits,
+      payments: data.payments,
+      items: data.items,
+      products: data.products,
+      deudaInicialPeriodo: deudaInicial.deudaInicialNew,
+      deudaInicialOldPeriodo: deudaInicial.deudaInicialOld,
+      dayKeyOf: (v) => bogotaDayKey(v),
+      gastosByKey,
+      entregadoByKey,
     });
-  }, [days, data]);
+  }, [days, data, deudaInicial, gastosByKey, entregadoByKey]);
 
-  const totals = useMemo(() => {
-    const sum = (key) => perDay.reduce((a, r) => a + Number(r[key] || 0), 0);
-    const sumEntrega = sum('entrega');
-    return {
-      saldoAnt: entregaPrevMonth,
-      cobros: sumEntrega + entregaPrevMonth,
-      costo: sum('costo'),
-      costoCll: sum('costoCll'),
-      efectivo: sum('efectivo'),
-      nequi: sum('nequi'),
-      total: sum('total'),
-      entrega: sum('entrega'),
-      gasto: sum('gasto'),
-      caja: sum('caja'),
-      ganancia: sum('ganancia'),
-    };
-  }, [perDay, entregaPrevMonth]);
+  const perDay = period.rows;
+
+  // ENTREGA total = deuda final del último día con movimiento (no se suma).
+  const totals = useMemo(() => buildPeriodTotals(perDay, period), [perDay, period]);
 
   const prevMonth = () => {
     const d = new Date(currentMonth);
@@ -240,28 +159,47 @@ export default function Page() {
         <p className="text-xs">
           <span className="font-bold">Vendedor:</span> Todos los vendedores
         </p>
-        <p className="text-[11px] text-slate-500">Las celdas en verde son editables. El resto se calcula automáticamente. Ganancia = Total - Costo</p>
+        <p className="text-[11px] text-slate-500">GASTO y $ son editables (verde). El resto se calcula automáticamente. GANANCIA = margen potencial (COSTO CLL − COSTO).</p>
+        {perDay.some((r) => !r.cuadra) && (
+          <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-[11px] font-bold text-red-700">
+            ⚠ $ no cuadra en {perDay.filter((r) => !r.cuadra).length} día(s): $ debe ser = TOTAL − GASTO. Revisa digitación o posible faltante.
+          </div>
+        )}
+        {deudaInicial.sesgoAcumulado !== 0 && (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-slate-700">
+            <button onClick={() => setShowAudit((v) => !v)} className="font-bold text-slate-900 underline">
+              {showAudit ? 'Ocultar auditoría del bug anterior ▾' : 'Ver auditoría del bug anterior ▸'}
+            </button>
+            <span className="ml-2">
+              Saldo inicial corregido: {money(deudaInicial.deudaInicialNew)} · Fórmula vieja habría mostrado: {money(deudaInicial.deudaInicialOld)} ·
+              Desvío acumulado: {money(deudaInicial.sesgoAcumulado)}.
+            </span>
+            {showAudit && (
+              <p className="mt-1 text-[10px] text-slate-500">Fórmula vieja: ENTREGA = SALDO ANT. + COBROS − TOTAL (duplicaba el saldo). Corregida: ENTREGA = COBROS − TOTAL. Deuda final del mes — vieja: {money(period.entregaOldPeriodo)}, corregida: {money(period.deudaFinalPeriodo)}, sesgo: {money(period.sesgoPeriodo)}.</p>
+            )}
+          </div>
+        )}
         <div className="overflow-auto">
           <table className="w-full text-[11px] border border-slate-200 min-w-[1200px]">
             <thead>
               <tr className="bg-[#2563eb] text-white">
                 <ThWithTooltip tip="Fecha del día del mes. Cada fila es un día del mes seleccionado." className="text-left">FECHA</ThWithTooltip>
-                <ThWithTooltip tip="SALDO ANT. = ENTREGA del mes pasado. Fórmula: SALDO ANT. = Σ(line_sale_total) del mes anterior.">SALDO ANT.</ThWithTooltip>
-                <ThWithTooltip tip="COBROS = Ventas nuevas hoy + SALDO ANT. Fórmula: COBROS = Σ(line_sale_total del día) + ENTREGA mes pasado.">COBROS</ThWithTooltip>
-                <ThWithTooltip tip="Costo de inversión = Σ(cantidad × costo_unitario) de todos los productos vendidos hoy. Suma del costo que pagó el admin por cada unidad vendida.">COSTO</ThWithTooltip>
-                <ThWithTooltip tip="COSTO CLL. = Σ(cantidad × precio_venta) de todos los productos vendidos hoy. Valor de venta.">COSTO CLL.</ThWithTooltip>
-                <ThWithTooltip tip="Recaudo en efectivo. Fórmula: SUM(abono WHERE payment_method='efectivo').">EFECTIVO</ThWithTooltip>
-                <ThWithTooltip tip="Recaudo por Nequi. Fórmula: SUM(abono WHERE payment_method='nequi').">NEQUI</ThWithTooltip>
-                <ThWithTooltip tip="TOTAL = EFECTIVO + NEQUI. Solo efectivo y Nequi.">TOTAL</ThWithTooltip>
-                <ThWithTooltip tip="ENTREGA = (SALDO ANT. + COBROS) − TOTAL. Si TOTAL sube, ENTREGA baja.">ENTREGA</ThWithTooltip>
-                <ThWithTooltip tip="Gastos del día (editable). Fórmula: valor manual.">GASTO</ThWithTooltip>
-                <ThWithTooltip tip="Caja. Fórmula: $ = TOTAL - GASTO."> $</ThWithTooltip>
-                <ThWithTooltip tip="Ganancia neta. Fórmula: GANANCIA = TOTAL - COSTO." className="bg-emerald-500">GANANCIA</ThWithTooltip>
+                <ThWithTooltip tip="BLOQUE 1 — Deuda inicial: deuda final del día anterior CON movimiento.">SALDO ANT.</ThWithTooltip>
+                <ThWithTooltip tip="BLOQUE 1 — COBROS = SALDO ANT. + COSTO CLL (ya incluye el saldo).">COBROS</ThWithTooltip>
+                <ThWithTooltip tip="BLOQUE 3 — Costo de inversión de lo entregado hoy. Solo informativo.">COSTO</ThWithTooltip>
+                <ThWithTooltip tip="BLOQUES 1 y 3 — COSTO CLL. = valor de venta de lo entregado hoy.">COSTO CLL.</ThWithTooltip>
+                <ThWithTooltip tip="BLOQUE 2 — Recaudo en efectivo. SUM(abono WHERE payment_method='efectivo').">EFECTIVO</ThWithTooltip>
+                <ThWithTooltip tip="BLOQUE 2 — Recaudo por Nequi. SUM(abono WHERE payment_method='nequi').">NEQUI</ThWithTooltip>
+                <ThWithTooltip tip="BLOQUE 2 — TOTAL = EFECTIVO + NEQUI.">TOTAL</ThWithTooltip>
+                <ThWithTooltip tip="BLOQUE 1 — Deuda final (corr.): ENTREGA = COBROS − TOTAL. Se propaga como SALDO ANT. siguiente.">ENTREGA</ThWithTooltip>
+                <ThWithTooltip tip="BLOQUE 2 — Gastos del día (editable, default 0).">GASTO</ThWithTooltip>
+                <ThWithTooltip tip="BLOQUE 2 — $ = TOTAL − GASTO. Si no cuadra se marca en rojo."> $</ThWithTooltip>
+                <ThWithTooltip tip="BLOQUE 3 — Margen potencial: GANANCIA = COSTO CLL − COSTO." className="bg-emerald-500">GANANCIA</ThWithTooltip>
               </tr>
             </thead>
             <tbody>
               {perDay.map((r) => (
-                <tr key={r.iso} className="border-t border-slate-200 hover:bg-slate-50">
+                <tr key={r.iso} className={`border-t border-slate-200 hover:bg-slate-50 ${!r.cuadra ? 'bg-red-50/60' : ''}`}>
                   <td className="px-2 py-2 font-bold text-slate-900">
                     {r.date.toLocaleDateString('es-CO', { weekday: 'long' })} <br />
                     <span className="text-[10px] font-normal text-slate-500">{r.date.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
@@ -274,8 +212,26 @@ export default function Page() {
                   <td className="px-1 py-2 text-center text-blue-700 font-bold">{money(r.nequi)}</td>
                   <td className="px-1 py-2 text-center font-black text-slate-900">{money(r.total)}</td>
                   <td className="px-1 py-2 text-center text-slate-700">{money(r.entrega)}</td>
-                  <td className="px-1 py-2 text-center text-slate-600">{money(r.gasto)}</td>
-                  <td className="px-1 py-2 text-center font-bold text-slate-900">{money(r.caja)}</td>
+                  <td className="px-1 py-2 text-center bg-emerald-50/60">
+                    <input
+                      type="number"
+                      min="0"
+                      value={gastosByKey[r.iso] ?? 0}
+                      onChange={(e) => setGastosByKey((m) => ({ ...m, [r.iso]: Number(e.target.value || 0) }))}
+                      className="w-20 rounded border border-emerald-300 bg-white px-1 py-0.5 text-center text-slate-900"
+                      title="Gasto del día (opcional, default 0)"
+                    />
+                  </td>
+                  <td className={`px-1 py-2 text-center font-bold ${r.cuadra ? 'text-slate-900 bg-emerald-50/60' : 'text-red-700 bg-red-100'}`} title={r.cuadra ? `$ = TOTAL − GASTO ✓` : `$ digitado (${money(r.caja)}) ≠ TOTAL − GASTO (${money(r.cajaEsperada)}). Posible error o faltante.`}>
+                    <input
+                      type="number"
+                      value={entregadoByKey[r.iso] ?? r.cajaEsperada}
+                      onChange={(e) => setEntregadoByKey((m) => ({ ...m, [r.iso]: e.target.value === '' ? '' : Number(e.target.value) }))}
+                      className={`w-20 rounded border px-1 py-0.5 text-center font-bold ${r.cuadra ? 'border-emerald-300 bg-white text-slate-900' : 'border-red-400 bg-white text-red-700'}`}
+                      title="$ entregado por el vendedor (debe = TOTAL − GASTO)"
+                    />
+                    {!r.cuadra && <div className="text-[9px] font-black">⚠ dif. {money(r.diferenciaCaja)}</div>}
+                  </td>
                   <td className={`px-1 py-2 text-center font-black ${r.ganancia >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>{money(r.ganancia)}</td>
                 </tr>
               ))}

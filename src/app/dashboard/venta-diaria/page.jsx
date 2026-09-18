@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { getToken } from '@/lib/auth';
 import { bogotaDayKey } from '@/lib/dates';
 import ThWithTooltip from '@/components/ThWithTooltip';
+import { buildCreditRow, buildCashRow, buildMarginRow } from '@/lib/report-blocks';
 
 function money(n) {
   const v = Number(n || 0);
@@ -15,6 +16,10 @@ export default function Page() {
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [data, setData] = useState({ visits: [], products: [], items: [] });
   const [loading, setLoading] = useState(true);
+  // Bloque 2 (caja): GASTO opcional por vendedor (default 0) y $ digitado
+  // (override opcional para validar cuadre: $ debe = TOTAL - GASTO).
+  const [gastosBySeller, setGastosBySeller] = useState({});
+  const [entregadoBySeller, setEntregadoBySeller] = useState({});
   // Tick de actualización en tiempo real: polling + foco/visibilidad
   const [tick, setTick] = useState(0);
 
@@ -56,49 +61,49 @@ export default function Page() {
 
   const perSeller = useMemo(() => {
     const dayVisits = (data.visits || []).filter((v) => bogotaDayKey(v.visit_date || v.created_at) === isoDate);
-    // Calcular SALDO ANT. = ENTREGA semana pasada por vendedor
-    // Semana actual: lunes a domingo que contiene selectedDate
+    // Semana actual: lunes a domingo que contiene selectedDate. La deuda
+    // inicial (SALDO ANT.) por vendedor es la deuda neta acumulada ANTES del
+    // lunes: Σ(venta − cobrado). La fórmula vieja usaba Σ(venta) bruta, lo que
+    // inflaba el saldo (más el bug ENTREGA = SALDO + COBROS − TOTAL).
     const sel = new Date(selectedDate);
     const day = sel.getDay();
     const diff = sel.getDate() - day + (day === 0 ? -6 : 1);
     const weekStart = new Date(sel);
     weekStart.setDate(diff);
     weekStart.setHours(0, 0, 0, 0);
-    const prevStart = new Date(weekStart);
-    prevStart.setDate(weekStart.getDate() - 7);
-    const prevEnd = new Date(weekStart);
-    prevEnd.setDate(weekStart.getDate() - 1);
-    const prevStartKey = bogotaDayKey(prevStart);
-    const prevEndKey = bogotaDayKey(prevEnd);
-    const prevVisits = (data.visits || []).filter((v) => {
+    const weekStartKey = bogotaDayKey(weekStart);
+    const deudaBySeller = new Map(); // sid -> { ventaHist, cobradoHist }
+    for (const v of data.visits || []) {
       const k = bogotaDayKey(v.visit_date || v.created_at);
-      return k >= prevStartKey && k <= prevEndKey;
-    });
-    const entregaPrevBySeller = new Map();
-    for (const v of prevVisits) {
+      if (!k || k >= weekStartKey) continue;
       const sid = v.seller_id;
-      entregaPrevBySeller.set(sid, (entregaPrevBySeller.get(sid) || 0) + Number(v.venta || 0));
+      if (!deudaBySeller.has(sid)) deudaBySeller.set(sid, { ventaHist: 0, cobradoHist: 0 });
+      const acc = deudaBySeller.get(sid);
+      acc.ventaHist += Number(v.venta || 0);
+      const method = String(v.payment_method || '').toLowerCase();
+      if (v.abono !== undefined && v.abono !== null && (method === 'efectivo' || method === 'nequi' || method === '' || v.payment_method === undefined)) {
+        acc.cobradoHist += Number(v.abono || 0);
+      }
     }
     // Agrupar por seller_id
     const map = new Map();
     for (const v of dayVisits) {
       const sid = v.seller_id;
-      if (!map.has(sid)) map.set(sid, { seller_id: sid, vendedor: v.vendedor || v.seller_name || sid.slice(0, 6), visits: [] });
+      if (!map.has(sid)) map.set(sid, { seller_id: sid, vendedor: v.vendedor || v.seller_name || String(sid).slice(0, 6), visits: [] });
       map.get(sid).visits.push(v);
     }
-    // Si no hay sellers con visitas, igualmente mostrar todos los sellers con 0? Para demo, mostrar al menos los que tienen visits
-    // También agregar sellers sin visitas con 0 para completar lista si es necesario
     const result = [];
     for (const [sid, group] of map.entries()) {
       const venta = group.visits.reduce((a, v) => a + Number(v.venta || 0), 0);
-      const ventasNuevasHoy = venta; // Σ(line_sale_total) del vendedor hoy
-      const tieneVenta = ventasNuevasHoy > 0;
-      const saldoAnt = tieneVenta ? (entregaPrevBySeller.get(sid) || 0) : 0; // ENTREGA semana pasada solo si hay venta hoy
-      const cobros = tieneVenta ? ventasNuevasHoy + (entregaPrevBySeller.get(sid) || 0) : 0; // Ventas nuevas + SALDO ANT.
+      const tieneMovimiento = venta > 0 || group.visits.some((v) => Number(v.abono || 0) > 0);
+      // BLOQUE 1 — deuda inicial = neto histórico del vendedor (0 si no hay movimiento hoy).
+      const acc = deudaBySeller.get(sid) || { ventaHist: 0, cobradoHist: 0 };
+      const deudaInicial = acc.ventaHist - acc.cobradoHist;
+      const saldoAnt = tieneMovimiento ? deudaInicial : 0;
+      // BLOQUE 2 — caja del vendedor (independiente de la deuda).
       const efectivo = group.visits.filter((v) => String(v.payment_method || '').toLowerCase() === 'efectivo').reduce((a, v) => a + Number(v.abono || 0), 0);
       const nequi = group.visits.filter((v) => String(v.payment_method || '').toLowerCase() === 'nequi').reduce((a, v) => a + Number(v.abono || 0), 0);
-      const total = efectivo + nequi;
-      // Costo de inversión = Σ(cantidad × costo_unitario) de todos los productos vendidos hoy por ese vendedor
+      // Costo de inversión de lo entregado hoy por ese vendedor (Bloque 3, dato).
       let costo = group.visits.reduce((a, v) => a + Number(v.costo || 0), 0);
       if (costo === 0 && data.items && data.items.length > 0) {
         const visitIds = new Set(group.visits.map((v) => v.id));
@@ -109,31 +114,43 @@ export default function Page() {
           if (costoFromItems > 0) costo = costoFromItems;
         }
       }
-      const costoCll = venta; // Valor de venta = Σ(cantidad × precio_venta)
-      const entrega = (saldoAnt + cobros) - total;
-      const gasto = 0;
-      const caja = total - gasto;
-      const ganancia = total - costo;
+      const costoCll = venta; // valor de venta de lo entregado hoy
+      // BLOQUE 1 — COBROS ya incluye SALDO ANT; ENTREGA = COBROS − TOTAL.
+      const credit = tieneMovimiento
+        ? buildCreditRow({ deudaInicial: saldoAnt, entregadoCreditoHoy: costoCll, cobradoHoy: efectivo + nequi })
+        : { saldoAnt: 0, cobros: 0, costoCll: 0, entrega: 0 };
+      // BLOQUE 2 — cierre con gasto opcional (default 0) + validación $.
+      const cashRow = buildCashRow({
+        efectivo,
+        nequi,
+        gasto: gastosBySeller[sid] ?? 0,
+        entregadoOverride: entregadoBySeller[sid] ?? null,
+      });
+      // BLOQUE 3 — margen informativo (no mezcla caja ni deuda).
+      const margin = buildMarginRow({ costo, costoCll });
       result.push({
         vendedor: group.vendedor,
         seller_id: sid,
-        saldoAnt,
-        cobros,
+        saldoAnt: credit.saldoAnt,
+        cobros: credit.cobros,
         costo,
         costoCll,
         efectivo,
         nequi,
-        total,
-        entrega,
-        gasto,
-        caja,
-        ganancia,
+        total: cashRow.total,
+        entrega: credit.entrega,
+        gasto: cashRow.gasto,
+        caja: cashRow.caja,
+        cajaEsperada: cashRow.cajaEsperada,
+        cuadra: cashRow.cuadra,
+        diferenciaCaja: cashRow.diferencia,
+        ganancia: margin.margen,
       });
     }
     // Ordenar por vendedor
     result.sort((a, b) => a.vendedor.localeCompare(b.vendedor));
     return result;
-  }, [data, isoDate]);
+  }, [data, isoDate, selectedDate, gastosBySeller, entregadoBySeller]);
 
   const prevDay = () => {
     const d = new Date(selectedDate);
@@ -167,23 +184,28 @@ export default function Page() {
         <p className="text-xs">
           <span className="font-bold">Vendedor:</span> Todos los vendedores · {perSeller.length} con ventas hoy
         </p>
-        <p className="text-[11px] text-slate-500">Las celdas en verde son editables. Gasto y $ los ingresa el vendedor. Ganancia = Total - Costo</p>
+        <p className="text-[11px] text-slate-500">GASTO y $ los ingresa el vendedor (verde). GANANCIA = margen potencial (COSTO CLL − COSTO).</p>
+        {perSeller.some((r) => !r.cuadra) && (
+          <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-[11px] font-bold text-red-700">
+            ⚠ $ no cuadra en {perSeller.filter((r) => !r.cuadra).length} vendedor(es): $ debe ser = TOTAL − GASTO. Revisa digitación o posible faltante.
+          </div>
+        )}
         <div className="overflow-auto">
           <table className="w-full text-[11px] border border-slate-200 min-w-[1100px]">
             <thead>
               <tr className="bg-[#2563eb] text-white">
                 <ThWithTooltip tip="Vendedor / cobrador. Cada fila agrupa todas las visitas de ese vendedor en el día seleccionado." className="text-left">VENDEDOR</ThWithTooltip>
-                <ThWithTooltip tip="SALDO ANT. = ENTREGA semana pasada por vendedor. Fórmula: SALDO ANT. = Σ(line_sale_total) de la semana anterior.">SALDO ANT.</ThWithTooltip>
-                <ThWithTooltip tip="COBROS = Ventas nuevas hoy + SALDO ANT. Fórmula: COBROS = Σ(line_sale_total del vendedor hoy) + ENTREGA semana pasada.">COBROS</ThWithTooltip>
-                <ThWithTooltip tip="Costo de inversión = Σ(cantidad × costo_unitario) de todos los productos vendidos hoy por ese vendedor. Suma del costo que pagó el admin.">COSTO</ThWithTooltip>
-                <ThWithTooltip tip="COSTO CLL. = Σ(cantidad × precio_venta) de todos los productos vendidos hoy por ese vendedor. Valor de venta.">COSTO CLL.</ThWithTooltip>
-                <ThWithTooltip tip="Recaudo en efectivo de ese vendedor. Fórmula: SUM(abono WHERE payment_method='efectivo').">EFECTIVO</ThWithTooltip>
-                <ThWithTooltip tip="Recaudo por Nequi de ese vendedor. Fórmula: SUM(abono WHERE payment_method='nequi').">NEQUI</ThWithTooltip>
-                <ThWithTooltip tip="TOTAL = EFECTIVO + NEQUI. Solo efectivo y Nequi.">TOTAL</ThWithTooltip>
-                <ThWithTooltip tip="ENTREGA = (SALDO ANT. + COBROS) − TOTAL.">ENTREGA</ThWithTooltip>
-                <ThWithTooltip tip="Gastos del día del vendedor (editable). Fórmula: valor manual. Afecta a $">GASTO</ThWithTooltip>
-                <ThWithTooltip tip="Caja de ese vendedor. Fórmula: $ = TOTAL - GASTO."> $</ThWithTooltip>
-                <ThWithTooltip tip="Ganancia de ese vendedor. Fórmula: GANANCIA = TOTAL - COSTO.">GANANCIA</ThWithTooltip>
+                <ThWithTooltip tip="BLOQUE 1 — Deuda inicial del vendedor: neto Σ(venta − cobrado) acumulado antes del lunes.">SALDO ANT.</ThWithTooltip>
+                <ThWithTooltip tip="BLOQUE 1 — COBROS = SALDO ANT. + COSTO CLL (ya incluye el saldo).">COBROS</ThWithTooltip>
+                <ThWithTooltip tip="BLOQUE 3 — Costo de inversión de lo entregado hoy por ese vendedor. Solo informativo.">COSTO</ThWithTooltip>
+                <ThWithTooltip tip="BLOQUES 1 y 3 — COSTO CLL. = valor de venta de lo entregado hoy por ese vendedor.">COSTO CLL.</ThWithTooltip>
+                <ThWithTooltip tip="BLOQUE 2 — Recaudo en efectivo de ese vendedor. SUM(abono WHERE payment_method='efectivo').">EFECTIVO</ThWithTooltip>
+                <ThWithTooltip tip="BLOQUE 2 — Recaudo por Nequi de ese vendedor. SUM(abono WHERE payment_method='nequi').">NEQUI</ThWithTooltip>
+                <ThWithTooltip tip="BLOQUE 2 — TOTAL = EFECTIVO + NEQUI.">TOTAL</ThWithTooltip>
+                <ThWithTooltip tip="BLOQUE 1 — Deuda final (corr.): ENTREGA = COBROS − TOTAL. Se propaga como SALDO ANT. siguiente.">ENTREGA</ThWithTooltip>
+                <ThWithTooltip tip="BLOQUE 2 — Gastos del día del vendedor (editable, default 0).">GASTO</ThWithTooltip>
+                <ThWithTooltip tip="BLOQUE 2 — $ = TOTAL − GASTO. Si no cuadra se marca en rojo."> $</ThWithTooltip>
+                <ThWithTooltip tip="BLOQUE 3 — Margen potencial: GANANCIA = COSTO CLL − COSTO.">GANANCIA</ThWithTooltip>
               </tr>
             </thead>
             <tbody>
@@ -195,7 +217,7 @@ export default function Page() {
                 </tr>
               ) : (
                 perSeller.map((r) => (
-                  <tr key={r.seller_id} className="border-t border-slate-200 hover:bg-slate-50">
+                  <tr key={r.seller_id} className={`border-t border-slate-200 hover:bg-slate-50 ${!r.cuadra ? 'bg-red-50/60' : ''}`}>
                     <td className="px-2 py-2 font-bold text-slate-900">{r.vendedor}</td>
                     <td className="px-1 py-2 text-center text-slate-600">{money(r.saldoAnt)}</td>
                     <td className="px-1 py-2 text-center font-bold">{money(r.cobros)}</td>
@@ -205,8 +227,26 @@ export default function Page() {
                     <td className="px-1 py-2 text-center text-blue-700 font-bold">{money(r.nequi)}</td>
                     <td className="px-1 py-2 text-center font-black">{money(r.total)}</td>
                     <td className="px-1 py-2 text-center">{money(r.entrega)}</td>
-                    <td className="px-1 py-2 text-center">{money(r.gasto)}</td>
-                    <td className="px-1 py-2 text-center font-bold">{money(r.caja)}</td>
+                    <td className="px-1 py-2 text-center bg-emerald-50/60">
+                      <input
+                        type="number"
+                        min="0"
+                        value={gastosBySeller[r.seller_id] ?? 0}
+                        onChange={(e) => setGastosBySeller((m) => ({ ...m, [r.seller_id]: Number(e.target.value || 0) }))}
+                        className="w-20 rounded border border-emerald-300 bg-white px-1 py-0.5 text-center text-slate-900"
+                        title="Gasto del día (opcional, default 0)"
+                      />
+                    </td>
+                    <td className={`px-1 py-2 text-center font-bold ${r.cuadra ? 'text-slate-900 bg-emerald-50/60' : 'text-red-700 bg-red-100'}`} title={r.cuadra ? `$ = TOTAL − GASTO ✓` : `$ digitado (${money(r.caja)}) ≠ TOTAL − GASTO (${money(r.cajaEsperada)}). Posible error o faltante.`}>
+                      <input
+                        type="number"
+                        value={entregadoBySeller[r.seller_id] ?? r.cajaEsperada}
+                        onChange={(e) => setEntregadoBySeller((m) => ({ ...m, [r.seller_id]: e.target.value === '' ? '' : Number(e.target.value) }))}
+                        className={`w-20 rounded border px-1 py-0.5 text-center font-bold ${r.cuadra ? 'border-emerald-300 bg-white text-slate-900' : 'border-red-400 bg-white text-red-700'}`}
+                        title="$ entregado por el vendedor (debe = TOTAL − GASTO)"
+                      />
+                      {!r.cuadra && <div className="text-[9px] font-black">⚠ dif. {money(r.diferenciaCaja)}</div>}
+                    </td>
                     <td className={`px-1 py-2 text-center font-black ${r.ganancia >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>{money(r.ganancia)}</td>
                   </tr>
                 ))
